@@ -1,4 +1,4 @@
-package paramstore // import "github.com/jmpa-oss/paramstore"
+package paramstore
 
 import (
 	"context"

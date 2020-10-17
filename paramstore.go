@@ -9,24 +9,23 @@ import (
 	"reflect"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/aws/external"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
-	"github.com/aws/aws-sdk-go-v2/service/ssm/ssmiface"
+	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 )
 
 // Handle abstracts the SSM service and Parameter Store functions.
 type Handle struct {
-	ssmiface.ClientAPI
+	*ssm.Client
 	KeyID string // Optional KMS key ID to use for encryption and decryption
 }
 
 // DefaultHandle returns a Handle with defaults set, obvs.
 func DefaultHandle() (*Handle, error) {
-	cfg, err := external.LoadDefaultAWSConfig()
+	cfg, err := config.LoadDefaultConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load aws config: %v", err)
 	}
-
 	reg := os.Getenv("AWS_DEFAULT_REGION")
 	if reg == "" {
 		reg = os.Getenv("AWS_REGION")
@@ -35,28 +34,27 @@ func DefaultHandle() (*Handle, error) {
 		reg = "ap-southeast-2"
 	}
 	cfg.Region = reg
-
-	return &Handle{ClientAPI: ssm.New(cfg)}, nil
+	return &Handle{Client: ssm.New(ssm.Options{Credentials: cfg.Credentials, Region: cfg.Region})}, nil
 }
 
 // Param is a thin wrapper over ssm.Parameter.
 type Param struct {
 	Name      string // the name of the parameter
 	Value     string // the value of the parameter
-	Type      string // the parameter type (String, StringList, SecureString)
-	Overwrite bool   // overwrite existing parameters during Put()
+	Type      types.ParameterType
+	Overwrite bool // overwrite existing parameters during Put()
 }
 
 // Exists checks if a single parameter exists in SSM.
 func (h Handle) Exists(n string) (bool, error) {
-	r := h.GetParametersRequest(&ssm.GetParametersInput{
-		Names: []string{n},
-	})
-	o, err := r.Send(context.Background())
+	in := &ssm.GetParametersInput{
+		Names: []*string{aws.String(n)},
+	}
+	out, err := h.GetParameters(context.Background(), in)
 	if err != nil {
 		return false, err
 	}
-	if len(o.InvalidParameters) > 0 {
+	if len(out.InvalidParameters) > 0 {
 		return false, nil
 	}
 	return true, nil
@@ -66,9 +64,9 @@ func (h Handle) Exists(n string) (bool, error) {
 // to match. If any parameter names are invalid (do not exist), an error is
 // returned in addition to a slice of Param structs (if possible). Querying is
 // performed in chunks to avoid paging.
-func (h Handle) Get(n ...string) ([]Param, error) {
+func (h Handle) Get(n ...*string) ([]Param, error) {
 	var pp []Param
-	var invalid []string
+	var invalid []*string
 
 	for i := 0; i < len(n); i += 10 { // chunked because AWS
 		x := i + 10
@@ -79,12 +77,11 @@ func (h Handle) Get(n ...string) ([]Param, error) {
 			Names:          n[i:x],
 			WithDecryption: aws.Bool(true),
 		}
-		r := h.GetParametersRequest(in)
-		o, err := r.Send(context.Background())
+		out, err := h.GetParameters(context.Background(), in)
 		if err != nil {
 			return nil, err
 		}
-		for _, p := range o.Parameters {
+		for _, p := range out.Parameters {
 			// there's a very slim chance the Value could be missing.
 			if p.Value == nil {
 				p.Value = aws.String("")
@@ -92,10 +89,10 @@ func (h Handle) Get(n ...string) ([]Param, error) {
 			pp = append(pp, Param{
 				Name:  *p.Name,
 				Value: *p.Value,
-				Type:  string(p.Type),
+				Type:  p.Type,
 			})
 		}
-		invalid = append(invalid, o.InvalidParameters...)
+		invalid = append(invalid, out.InvalidParameters...)
 	}
 	if len(invalid) > 0 {
 		return pp, missingErr{invalid}
@@ -115,10 +112,12 @@ func (h Handle) GetPath(path string, rec bool) ([]Param, error) {
 		Recursive:      aws.Bool(rec),
 		WithDecryption: aws.Bool(true),
 	}
-	r := h.GetParametersByPathRequest(in)
-	pg := ssm.NewGetParametersByPathPaginator(r)
-	for pg.Next(context.Background()) {
-		for _, p := range pg.CurrentPage().Parameters {
+	for {
+		out, err := h.GetParametersByPath(context.Background(), in)
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range out.Parameters {
 			// there's a very slim chance the Value could be missing.
 			if p.Value == nil {
 				p.Value = aws.String("")
@@ -126,8 +125,11 @@ func (h Handle) GetPath(path string, rec bool) ([]Param, error) {
 			pp = append(pp, Param{
 				Name:  *p.Name,
 				Value: *p.Value,
-				Type:  string(p.Type),
+				Type:  p.Type,
 			})
+		}
+		if out.NextToken != nil {
+			in.NextToken = out.NextToken
 		}
 	}
 	return pp, nil
@@ -171,7 +173,7 @@ func (h Handle) Decode(pfx string, v interface{}) error {
 			}
 		case k == "":
 		case f.Type.Kind() == reflect.String:
-			ps, err := h.Get(pfx + k)
+			ps, err := h.Get(aws.String(pfx + k))
 			if err != nil {
 				return fmt.Errorf("failed to decode %s into %s: %s", pfx+k, f.Name, err)
 			}
@@ -217,14 +219,13 @@ func (h Handle) Put(pp ...Param) error {
 		i := &ssm.PutParameterInput{
 			Name:      aws.String(p.Name),
 			Value:     aws.String(p.Value),
-			Type:      ssm.ParameterType(p.Type),
+			Type:      p.Type,
 			Overwrite: aws.Bool(p.Overwrite),
 		}
 		if h.KeyID != "" {
 			i.KeyId = aws.String(h.KeyID)
 		}
-		r := h.PutParameterRequest(i)
-		_, err := r.Send(context.Background())
+		_, err := h.PutParameter(context.Background(), i)
 		if err != nil {
 			return err // TODO discuss
 		}
@@ -233,17 +234,17 @@ func (h Handle) Put(pp ...Param) error {
 }
 
 // Del accepts a number of parameter names and deletes them.
-func (h Handle) Del(n ...string) error {
+func (h Handle) Del(n ...*string) error {
 	// TODO test if 10-param limit is in effect here
-	r := h.DeleteParametersRequest(&ssm.DeleteParametersInput{
+	in := &ssm.DeleteParametersInput{
 		Names: n,
-	})
-	o, err := r.Send(context.Background())
+	}
+	out, err := h.DeleteParameters(context.Background(), in)
 	if err != nil {
 		return err
 	}
-	if len(o.InvalidParameters) > 0 {
-		return missingErr{o.InvalidParameters}
+	if len(out.InvalidParameters) > 0 {
+		return missingErr{out.InvalidParameters}
 	}
 	return nil
 }
@@ -258,7 +259,7 @@ func (p Param) String() string {
 
 // Get gets a single parameter using the default AWS config. The AWS region, if not present,
 // will default to ap-southeast-2. The parameter will be decrypted and its value is returned.
-func Get(n string) (string, error) {
+func Get(n *string) (string, error) {
 	h, err := DefaultHandle()
 	if err != nil {
 		return "", err
@@ -268,7 +269,7 @@ func Get(n string) (string, error) {
 		return "", err
 	}
 	if len(ps) != 1 {
-		return "", fmt.Errorf("%s: %d parameters matched", n, len(ps))
+		return "", fmt.Errorf("%s: %d parameters matched", *n, len(ps))
 	}
 	return ps[0].Value, nil
 }
@@ -283,7 +284,7 @@ func Put(p Param) error {
 }
 
 // Del deletes n number of parameters using the default handle.
-func Del(p ...string) error {
+func Del(p ...*string) error {
 	h, err := DefaultHandle()
 	if err != nil {
 		return err
@@ -314,7 +315,7 @@ func Encode(pfx string, v interface{}) error {
 }
 
 type missingErr struct {
-	params []string
+	params []*string
 }
 
 func (e missingErr) Error() string {

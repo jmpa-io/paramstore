@@ -3,7 +3,7 @@ module github.com/jmpa-oss/paramstore
 go 1.13
 
 require (
-	github.com/aws/aws-sdk-go-v2 v0.27.0
+	github.com/aws/aws-sdk-go-v2 v0.29.0
 	github.com/aws/aws-sdk-go-v2/config v0.2.0
 	github.com/aws/aws-sdk-go-v2/service/ssm v0.27.0
 	github.com/go-kit/kit v0.10.0

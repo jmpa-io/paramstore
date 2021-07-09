@@ -132,7 +132,7 @@ func GetPaths(paths ...string) (Params, error) {
 }
 
 // uploads the given param to the given path.
-func Put(params Params) error {
+func Put(params ...Param) error {
 
 	// check input.
 	if len(params) == 0 {

@@ -24,6 +24,7 @@ github.com/aws/aws-sdk-go-v2 v0.24.0 h1:R0lL0krk9EyTI1vmO1ycoeceGZotSzCKO51LbPGq
 github.com/aws/aws-sdk-go-v2 v0.24.0/go.mod h1:2LhT7UgHOXK3UXONKI5OMgIyoQL6zTAw/jwIeX6yqzw=
 github.com/aws/aws-sdk-go-v2 v0.27.0 h1:8wAIY9hr16U+qOak9djvIIGCu5zbnPThJkPJgQRYCn4=
 github.com/aws/aws-sdk-go-v2 v0.27.0/go.mod h1:F9alGopZD03PJvZJSuXC9d0nQuvbmgcKgeIrEmLZG3s=
+github.com/aws/aws-sdk-go-v2 v0.31.0/go.mod h1:IQw4KL7QIoaNDT3WoEBV1fDlVRhp/WTRteoaplV3SHo=
 github.com/aws/aws-sdk-go-v2/config v0.2.0 h1:63AqNmJaCHhvrXcG9AXU8pr0wbQGlkzxQO+C3N0r54Y=
 github.com/aws/aws-sdk-go-v2/config v0.2.0/go.mod h1:iswkkZ9YWgy1Pk1E9pmtxnFrqtNijgJDfa0NBnWvsSA=
 github.com/aws/aws-sdk-go-v2/credentials v0.1.2 h1:Sls7iKWkeOIGiTxXBWW+8fGTCWQN9SzTVK+FLBndd9w=
@@ -34,6 +35,7 @@ github.com/aws/aws-sdk-go-v2/service/ssm v0.27.0 h1:EFnEdOj3ESxNp53ZWfGW5IYAxM5Q
 github.com/aws/aws-sdk-go-v2/service/ssm v0.27.0/go.mod h1:Enwu85374D0/J+u2eWBXu65EWZngyln/AGwcPqGfTTM=
 github.com/aws/aws-sdk-go-v2/service/sts v0.27.0 h1:9dFiwklBbUgejYe9F9ivK/CVq2uMT2BOPzcvBCsoyr0=
 github.com/aws/aws-sdk-go-v2/service/sts v0.27.0/go.mod h1:0N+L7fP2Zm4s8Ib+ZBCjtX4caWMiMG5xV6RB6ec8x/c=
+github.com/aws/smithy-go v0.5.0/go.mod h1:EzMw8dbp/YJL4A5/sbhGddag+NPT7q084agLbB9LgIw=
 github.com/awslabs/smithy-go v0.2.0 h1:lXzqqSYp5pLdLyjo4OMkyS57RrZIFPwkOayjqnBA02I=
 github.com/awslabs/smithy-go v0.2.0/go.mod h1:hPOQwnmBLHsUphH13tVSjQhTAFma0/0XoZGbBcOuABI=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
@@ -96,6 +98,7 @@ github.com/google/go-cmp v0.2.0/go.mod h1:oXzfMopK8JAjlY9xF4vHSVASa0yLyX7SntLO5a
 github.com/google/go-cmp v0.3.0/go.mod h1:8QqcDgzrUqlUb/G2PQTWiueGozuR1884gddMywk6iLU=
 github.com/google/go-cmp v0.3.1/go.mod h1:8QqcDgzrUqlUb/G2PQTWiueGozuR1884gddMywk6iLU=
 github.com/google/go-cmp v0.4.1/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/gNBxE=
+github.com/google/go-cmp v0.5.4/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/gNBxE=
 github.com/google/gofuzz v1.0.0/go.mod h1:dBl0BpW6vV/+mYPU4Po3pmUjxk6FQPldtuIdl/M65Eg=
 github.com/google/renameio v0.1.0/go.mod h1:KWCgfxg9yswjAJkECMjeO8J8rahYeXnNhOm40UhjYkI=
 github.com/google/uuid v1.0.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=

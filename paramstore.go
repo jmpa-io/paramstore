@@ -1,328 +1,161 @@
 package paramstore
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
-	"reflect"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/ssm"
-	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ssm"
 )
 
-// Handle abstracts the SSM service and Parameter Store functions.
-type Handle struct {
-	*ssm.Client
-	KeyID string // Optional KMS key ID to use for encryption and decryption
+type handler struct {
+	ssmsvc *ssm.SSM
 }
 
-// DefaultHandle returns a Handle with defaults set, obvs.
-func DefaultHandle() (*Handle, error) {
-	cfg, err := config.LoadDefaultConfig()
+// sets up the handler used in public functions in this package.
+func defaultHandler() (*handler, error) {
+
+	// which region?
+	region := os.Getenv("AWS_DEFAULT_REGION")
+	if region == "" {
+		region = os.Getenv("AWS_REGION")
+	}
+	if region == "" {
+		region = "ap-southeast-2"
+	}
+
+	// setup session.
+	sess, err := session.NewSessionWithOptions(session.Options{
+		Config: aws.Config{Region: aws.String(region)},
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to load aws config: %v", err)
+		return nil, Error{fmt.Sprintf("failed to setup aws session: %v", err)}
 	}
-	reg := os.Getenv("AWS_DEFAULT_REGION")
-	if reg == "" {
-		reg = os.Getenv("AWS_REGION")
-	}
-	if reg == "" {
-		reg = "ap-southeast-2"
-	}
-	cfg.Region = reg
-	return &Handle{Client: ssm.New(ssm.Options{Credentials: cfg.Credentials, Region: cfg.Region})}, nil
+
+	// return handler.
+	return &handler{
+		ssmsvc: ssm.New(sess, nil),
+	}, nil
 }
 
-// Param is a thin wrapper over ssm.Parameter.
+// Param represents a param stored in paramstore.
 type Param struct {
-	Name      string // the name of the parameter
-	Value     string // the value of the parameter
-	Type      types.ParameterType
-	Overwrite bool // overwrite existing parameters during Put()
+	Name  string
+	Value string
+	Type  string
 }
 
-// Exists checks if a single parameter exists in SSM.
-func (h Handle) Exists(n string) (bool, error) {
-	in := &ssm.GetParametersInput{
-		Names: []*string{aws.String(n)},
-	}
-	out, err := h.GetParameters(context.Background(), in)
-	if err != nil {
-		return false, err
-	}
-	if len(out.InvalidParameters) > 0 {
-		return false, nil
-	}
-	return true, nil
-}
+type Params []Param
 
-// Get accepts a number of parameter names and returns a slice of Param structs
-// to match. If any parameter names are invalid (do not exist), an error is
-// returned in addition to a slice of Param structs (if possible). Querying is
-// performed in chunks to avoid paging.
-func (h Handle) Get(n ...*string) ([]Param, error) {
-	var pp []Param
+// retrieves params for the given paths from paramstore.
+func (h *handler) Get(paths ...string) (Params, error) {
+
+	// check input.
+	if len(paths) == 0 {
+		return nil, Error{"missing paths"}
+	}
+
+	// read params.
+	var params Params
 	var invalid []*string
+	size := 10 // size of chunk.
+	for b := 0; b < len(paths); b += size {
+		n := b + size // number of params to read at a time.
+		if n > len(paths) {
+			n = len(paths)
+		}
 
-	for i := 0; i < len(n); i += 10 { // chunked because AWS
-		x := i + 10
-		if x > len(n) {
-			x = len(n)
-		}
-		in := &ssm.GetParametersInput{
-			Names:          n[i:x],
+		// retrieve params.
+		out, err := h.ssmsvc.GetParameters(&ssm.GetParametersInput{
+			Names:          aws.StringSlice(paths[b:n]),
 			WithDecryption: aws.Bool(true),
-		}
-		out, err := h.GetParameters(context.Background(), in)
+		})
 		if err != nil {
-			return nil, err
+			return nil, Error{fmt.Sprintf("failed to read params from paramstore: %v", err)}
 		}
+
+		// parse params.
 		for _, p := range out.Parameters {
-			// there's a very slim chance the Value could be missing.
-			if p.Value == nil {
+			if p.Value == nil { // slim chance the Value could missing.
 				p.Value = aws.String("")
 			}
-			pp = append(pp, Param{
+			params = append(params, Param{
 				Name:  *p.Name,
 				Value: *p.Value,
-				Type:  p.Type,
+				Type:  *p.Type,
 			})
 		}
 		invalid = append(invalid, out.InvalidParameters...)
 	}
+
+	// any invalid params?
 	if len(invalid) > 0 {
-		return pp, missingErr{invalid}
+		return params, missingErr{invalid}
 	}
-	return pp, nil
+	return params, nil
 }
 
-// GetPath accepts a path and returns all parameters which match and an error.
-// The second parameter, if true, will recurse results.
-func (h Handle) GetPath(path string, rec bool) ([]Param, error) {
-	var pp []Param
-	if len(path) == 0 {
-		return pp, errors.New("path must one or more chars")
-	}
-	in := &ssm.GetParametersByPathInput{
-		Path:           aws.String(path),
-		Recursive:      aws.Bool(rec),
-		WithDecryption: aws.Bool(true),
-	}
-	for {
-		out, err := h.GetParametersByPath(context.Background(), in)
-		if err != nil {
-			return nil, err
-		}
-		for _, p := range out.Parameters {
-			// there's a very slim chance the Value could be missing.
-			if p.Value == nil {
-				p.Value = aws.String("")
-			}
-			pp = append(pp, Param{
-				Name:  *p.Name,
-				Value: *p.Value,
-				Type:  p.Type,
-			})
-		}
-		if out.NextToken != nil {
-			in.NextToken = out.NextToken
-		}
-	}
-	return pp, nil
-}
+// Get retrieves a single param from paramstore, for the given path.
+func Get(path string) (string, error) {
 
-// Glob applies filepath globbing to all parameters and returns those that match.
-func (h Handle) Glob(glob string) ([]Param, error) {
-	ps, err := h.GetPath("/", true)
+	// setup handler.
+	h, err := defaultHandler()
 	if err != nil {
-		return []Param{}, err
+		return "", Error{fmt.Sprintf("failed to default handler: %v", err)}
 	}
-	ms := []Param{}
-	for _, p := range ps {
-		m, err := filepath.Match(glob, p.Name)
-		switch {
-		case err != nil:
-			return []Param{}, err
-		case m:
-			ms = append(ms, p)
-		}
+
+	// retrieve param.
+	params, err := h.Get(path)
+	if err != nil {
+		return "", err
 	}
-	return ms, nil
+
+	// multiple params returned?
+	if len(params) != 1 {
+		return "", Error{fmt.Sprintf("%s matched %d parameters", path, len(params))}
+	}
+	return params[0].Value, nil
 }
 
-// Decode fetches params into a struct using "ssm" struct tags.
-// Nested structs are passed the tag of the parent as a prefix.
-// Passing anything other than a pointer to a struct is guaranteed to end badly.
-func (h Handle) Decode(pfx string, v interface{}) error {
-	u := reflect.ValueOf(v)
-	if u.Kind() == reflect.Ptr {
-		u = u.Elem()
+// GetPaths retrieves multiple params from paramstore at a time, for the given paths.
+func GetPaths(paths ...string) (Params, error) {
+
+	// setup handler.
+	h, err := defaultHandler()
+	if err != nil {
+		return nil, Error{fmt.Sprintf("failed to default handler: %v", err)}
 	}
-	t := u.Type()
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		k := f.Tag.Get("ssm")
-		switch {
-		case f.Type.Kind() == reflect.Struct:
-			if err := h.Decode(pfx+k, u.Field(i).Addr().Interface()); err != nil {
-				return err
-			}
-		case k == "":
-		case f.Type.Kind() == reflect.String:
-			ps, err := h.Get(aws.String(pfx + k))
-			if err != nil {
-				return fmt.Errorf("failed to decode %s into %s: %s", pfx+k, f.Name, err)
-			}
-			u.Field(i).Set(reflect.ValueOf(ps[0].Value))
-		}
-	}
-	return nil
+
+	// retrieve + return params.
+	return h.Get(paths...)
 }
 
-// Encode puts params from a struct using "ssm" struct tags.
-// Nested structs use the tag of the parent as a prefix.
-// Passing anything other than a pointer to a struct is guaranteed to end badly.
-func (h Handle) Encode(pfx string, v interface{}) error {
-	u := reflect.ValueOf(v)
-	if u.Kind() == reflect.Ptr {
-		u = u.Elem()
-	}
-	t := u.Type()
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		k := f.Tag.Get("ssm")
-		switch {
-		case f.Type.Kind() == reflect.Struct:
-			if err := h.Encode(pfx+k, u.Field(i).Interface()); err != nil {
-				return err
-			}
-		case k == "":
-		case f.Type.Kind() == reflect.String:
-			p := Param{Name: pfx + k, Value: u.Field(i).String(), Type: "String", Overwrite: true}
-			if err := h.Put(p); err != nil {
-				return fmt.Errorf("failed to encode %s into %s: %s", f.Name, pfx+k, err)
-			}
-		}
-	}
-	return nil
-}
+// uploads the given param to the given path.
+func Put(params Params) error {
 
-// Put accepts a number of Param structs and writes them to Parameter Store in
-// the other they are supplied. Paramters which already exist will cause an
-// error to be returned immediately unless the Overwrite field is set to true.
-func (h Handle) Put(pp ...Param) error {
-	for _, p := range pp {
-		i := &ssm.PutParameterInput{
+	// check input.
+	if len(params) == 0 {
+		return Error{"missing params"}
+	}
+
+	// setup handler.
+	h, err := defaultHandler()
+	if err != nil {
+		return Error{fmt.Sprintf("failed to default handler: %v", err)}
+	}
+
+	// put params.
+	for _, p := range params {
+		_, err := h.ssmsvc.PutParameter(&ssm.PutParameterInput{
 			Name:      aws.String(p.Name),
 			Value:     aws.String(p.Value),
-			Type:      p.Type,
-			Overwrite: aws.Bool(p.Overwrite),
-		}
-		if h.KeyID != "" {
-			i.KeyId = aws.String(h.KeyID)
-		}
-		_, err := h.PutParameter(context.Background(), i)
+			Type:      aws.String(p.Type),
+			Overwrite: aws.Bool(true),
+		})
 		if err != nil {
-			return err // TODO discuss
+			return Error{fmt.Sprintf("failed to put parameter: %v", err)}
 		}
 	}
 	return nil
-}
-
-// Del accepts a number of parameter names and deletes them.
-func (h Handle) Del(n ...*string) error {
-	// TODO test if 10-param limit is in effect here
-	in := &ssm.DeleteParametersInput{
-		Names: n,
-	}
-	out, err := h.DeleteParameters(context.Background(), in)
-	if err != nil {
-		return err
-	}
-	if len(out.InvalidParameters) > 0 {
-		return missingErr{out.InvalidParameters}
-	}
-	return nil
-}
-
-func (p Param) String() string {
-	v := p.Value
-	if p.Type == "SecureString" {
-		v = "***"
-	}
-	return fmt.Sprintf("%s\t%v\t%s", p.Name, v, p.Type)
-}
-
-// Get gets a single parameter using the default AWS config. The AWS region, if not present,
-// will default to ap-southeast-2. The parameter will be decrypted and its value is returned.
-func Get(n *string) (string, error) {
-	h, err := DefaultHandle()
-	if err != nil {
-		return "", err
-	}
-	ps, err := h.Get(n)
-	if err != nil {
-		return "", err
-	}
-	if len(ps) != 1 {
-		return "", fmt.Errorf("%s: %d parameters matched", *n, len(ps))
-	}
-	return ps[0].Value, nil
-}
-
-// Put puts a single parameter using the default handle.
-func Put(p Param) error {
-	h, err := DefaultHandle()
-	if err != nil {
-		return err
-	}
-	return h.Put(p)
-}
-
-// Del deletes n number of parameters using the default handle.
-func Del(p ...*string) error {
-	h, err := DefaultHandle()
-	if err != nil {
-		return err
-	}
-	return h.Del(p...)
-}
-
-// Decode fetches params into a struct using "ssm" struct tags.
-// Nested structs are passed the tag of the parent as a prefix.
-// Passing anything other than a pointer to a struct is guaranteed to end badly.
-func Decode(pfx string, v interface{}) error {
-	h, err := DefaultHandle()
-	if err != nil {
-		return err
-	}
-	return h.Decode(pfx, v)
-}
-
-// Decode fetches params into a struct using "ssm" struct tags.
-// Nested structs are passed the tag of the parent as a prefix.
-// Passing anything other than a pointer to a struct is guaranteed to end badly.
-func Encode(pfx string, v interface{}) error {
-	h, err := DefaultHandle()
-	if err != nil {
-		return err
-	}
-	return h.Encode(pfx, v)
-}
-
-type missingErr struct {
-	params []*string
-}
-
-func (e missingErr) Error() string {
-	return fmt.Sprintf("invalid params: %v", e.params)
-}
-
-func IsMissing(err error) bool {
-	_, ok := err.(missingErr)
-	return ok
 }

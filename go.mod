@@ -1,6 +1,6 @@
-module github.com/jmpa-oss/paramstore
+module github.com/jmpa-io/paramstore
 
-go 1.13
+go 1.17
 
 require (
 	github.com/aws/aws-sdk-go v1.27.0

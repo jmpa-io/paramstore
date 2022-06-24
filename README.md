@@ -1,7 +1,9 @@
-# paramstore
+<!-- markdownlint-disable MD041 MD010 -->
+[![paramstore](https://github.com/jmpa-io/paramstore/actions/workflows/cicd.yml/badge.svg)](https://github.com/jmpa-io/paramstore/actions/workflows/cicd.yml)
+[![paramstore](https://github.com/jmpa-io/paramstore/actions/workflows/README.yml/badge.svg)](https://github.com/jmpa-io/paramstore/actions/workflows/README.yml)
 
-A lightweight Go abstraction over AWS SSM Parameter store.
+# `paramstore`
 
-## TODO
-
-add a release mech to push a new version out.
+```diff
++ 🍱 A Go abstraction over AWS SSM Parameter Store.
+```

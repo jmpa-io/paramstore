@@ -1,0 +1,19 @@
+---
+steps:
+
+  # TODO lint.
+
+  # TODO vet.
+
+  # TODO test.
+
+  # TODO sonarqube.
+
+  - label: ':sloth: hi'
+    command: echo "hello world!"
+
+  - wait
+
+  - label: ':github: release'
+    command: ./release.sh $BUILDKITE_BRANCH
+    branches: release/v*.*.0

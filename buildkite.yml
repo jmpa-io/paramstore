@@ -16,4 +16,4 @@ steps:
 
   - label: ':github: release'
     command: ./release.sh $BUILDKITE_BRANCH
-    branches: release/v*.*.0
+    branches: release/v*.*.*

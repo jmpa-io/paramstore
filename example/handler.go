@@ -12,7 +12,7 @@ import (
 type handler struct {
 
 	// config.
-	app, version, env string
+	name, version, env string
 
 	// clients.
 	paramstoresvc *paramstore.Client
@@ -24,7 +24,7 @@ type handler struct {
 func (h *handler) run(ctx context.Context) {
 
 	// setup span.
-	_, span := otel.Tracer(h.app).Start(ctx, "run")
+	_, span := otel.Tracer(h.name).Start(ctx, "run")
 	defer span.End()
 
 	// pull param.

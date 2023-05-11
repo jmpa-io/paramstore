@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
@@ -14,12 +15,12 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 
 	"github.com/myob-ops/paramstore"
-	"github.com/rs/zerolog"
 )
 
-// consts.
-const App = "example"
-const Version = "head"
+const (
+	Name    = "example"
+	Version = "head"
+)
 
 func main() {
 
@@ -41,7 +42,7 @@ func main() {
 
 	// setup handler.
 	h := &handler{
-		app:     App,
+		name:    Name,
 		version: Version,
 		env:     getEnv("ENVIRONMENT", "dev"),
 
@@ -73,7 +74,7 @@ func main() {
 	// setup trace provider.
 	tp := trace.NewTracerProvider(
 		trace.WithBatcher(exp),
-		trace.WithResource(newResource(h.app, h.env, h.version)),
+		trace.WithResource(newResource(h.name, h.env, h.version)),
 	)
 	defer func() {
 		if err := tp.Shutdown(context.Background()); err != nil {
@@ -88,7 +89,7 @@ func main() {
 	// ---
 
 	// setup span.
-	ctx, span := otel.Tracer(h.app).Start(context.Background(), "main")
+	ctx, span := otel.Tracer(h.name).Start(context.Background(), "main")
 	defer span.End()
 
 	// setup paramstore.

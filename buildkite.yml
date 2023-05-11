@@ -15,5 +15,5 @@ steps:
   - wait
 
   - label: ':github: release'
-    command: ./release.sh $BUILDKITE_BRANCH
+    command: ./bin/release.sh $BUILDKITE_BRANCH
     branches: release/v*.*.*

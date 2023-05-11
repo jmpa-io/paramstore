@@ -9,11 +9,16 @@ steps:
 
   # TODO sonarqube.
 
+  # TODO add matrix
   - label: ':sloth: hi'
-    command: echo "hello world!"
+    command: go build
+    artifacts:
+      - *.go
 
   - wait
 
   - label: ':github: release'
-    command: ./bin/release.sh $BUILDKITE_BRANCH
-    branches: release/v*.*.*
+    commands: 
+      - buildkite-agent artifacts download *.go
+      - ./bin/release.sh $BUILDKITE_BRANCH
+    branches: release/v*.*.0

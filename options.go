@@ -17,15 +17,23 @@ func WithAWSRegion(region string) Option {
 	}
 }
 
+const (
+	// the min batch size used when uploading to paramstore.
+	minBatchSize = 0
+
+	// the max batch size used when uploading to paramstore.
+	maxBatchSize = 10
+)
+
 // WithBatchSize configures the batchSize used by the client when retrieving
 // from or uploading to paramstore.
 func WithBatchSize(size int) Option {
 	return func(c *Client) error {
-		if size <= 0 {
-			return fmt.Errorf("batchSize must be greater than 0")
+		if size <= minBatchSize {
+			return fmt.Errorf("batchSize must be greater than %v", minBatchSize)
 		}
-		if size > 10 {
-			return fmt.Errorf("batchSize must be less than or equal to 10")
+		if size > maxBatchSize {
+			return fmt.Errorf("batchSize must be less than or equal to %v", maxBatchSize)
 		}
 		c.batchSize = size
 		return nil

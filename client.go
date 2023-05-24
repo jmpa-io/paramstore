@@ -20,9 +20,10 @@ type Client struct {
 	ssmsvc *ssm.Client
 
 	// aws.
-	awsRegion      string
-	batchSize      int
-	withDecryption bool
+	awsRegion      string // the aws region to use when doing things with paramstore.
+	batchSize      int    // batch size used when retrieving parameters.
+	withDecryption bool   // decrypts the parameters when retrieving them.
+	keyId          string // the KMS key to use when encrypting and decrypting parameters from paramstore.
 
 	// misc.
 	logger zerolog.Logger

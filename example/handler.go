@@ -28,17 +28,41 @@ func (h *handler) run(ctx context.Context) {
 	newCtx, span := otel.Tracer(h.name).Start(ctx, "run")
 	defer span.End()
 
-	params := []paramstore.Param{
+	// setup params.
+	params := paramstore.Params{
 		{
-			Name:  "/jordan-test",
-			Value: "hello",
-			Type:  paramstore.ParamTypeSecureString,
+			Name:  "/paramstore-test/1",
+			Value: "1",
+			Type:  paramstore.SecureStringParamType,
+		},
+		{
+			Name:  "/paramstore-test/2",
+			Value: "2",
+			Type:  paramstore.StringParamType,
 		},
 	}
-	if errs := h.paramstoresvc.Put(newCtx, params...); errs != 0 {
+
+	// setup logger.
+	l := h.logger.With().Int("count", len(params)).Logger()
+
+	// upload params.
+	if errs := h.paramstoresvc.Put(newCtx, params); errs != 0 {
+		l.Error().Int("errors", errs).Msg("failed to upload params")
 		os.Exit(1)
 	}
+	l.Debug().Msg("successfully uploaded params")
 
-	// pull param.
-	h.paramstoresvc.Get()
+	// download params.
+	if _, errs := h.paramstoresvc.Get(newCtx, params.NamesToSliceString()...); errs != 0 {
+		l.Error().Int("errors", errs).Msg("failed to download params")
+		os.Exit(1)
+	}
+	l.Debug().Msg("successfully downloaded params")
+
+	// delete params.
+	if errs := h.paramstoresvc.Delete(newCtx, params.NamesToSliceString()...); errs != 0 {
+		l.Error().Int("errors", errs).Msg("failed to delete params")
+		os.Exit(1)
+	}
+	l.Debug().Msg("successfully deleted params")
 }

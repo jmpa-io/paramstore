@@ -70,7 +70,7 @@ func (c *Client) Get(ctx context.Context, names ...string) (out []Param, errs in
 }
 
 // Put uploads one or more params to paramstore.
-func (c *Client) Put(ctx context.Context, params ...Param) (errs int) {
+func (c *Client) Put(ctx context.Context, params Params) (errs int) {
 
 	// setup tracing.
 	newCtx, span := otel.Tracer(c.name).Start(ctx, "Put")

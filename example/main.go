@@ -37,7 +37,7 @@ func main() {
 	case "error":
 		level = zerolog.ErrorLevel
 	default:
-		level = zerolog.InfoLevel
+		level = zerolog.DebugLevel
 	}
 
 	// setup handler.

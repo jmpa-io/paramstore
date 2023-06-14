@@ -21,4 +21,4 @@ steps:
     commands: 
       - buildkite-agent artifacts download *.go
       - ./bin/release.sh $BUILDKITE_BRANCH
-    branches: release/v*.*.0
+    branches: "release/v*.*.0"

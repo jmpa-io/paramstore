@@ -19,27 +19,23 @@ plugins:
       project_name: paramstore
       sources: [.]
 
-env:
-  MAIN: build.branch == pipeline.default_branch
-  NOT_MAIN: build.branch != pipeline.default_branch
-
 steps:
   - label: ':jenkins: Lint'
-    if: $NOT_MAIN
+    branches: "!default"
     command: echo make lint
     <<: *retry
     # plugins:
     #   <<: *go
 
   - label: ':sweating: Test'
-    if: $NOT_MAIN
+    branches: "!default"
     command: echo make test
     <<: *retry
     # plugins:
     #   <<: *go
 
   - label: ':sonarqube: Sonarqube'
-    if: $NOT_MAIN
+    branches: "!default"
     <<: *retry
     soft_fail:
       - exit_status: '*'
@@ -47,10 +43,10 @@ steps:
       <<: *sonarqube
 
   - wait: ~
-    if: $NOT_MAIN
+    branches: "!default"
 
   - label: ':teacher: Integration Test'
-    if: $NOT_MAIN
+    branches: "!default"
     command: echo make example
     <<: *retry
     # plugins:

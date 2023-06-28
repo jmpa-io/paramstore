@@ -21,21 +21,21 @@ plugins:
 
 steps:
   - label: ':jenkins: Lint'
-    branches: "!default"
+    branches: ["!default", "!v*.*.*"]
     command: echo make lint
     <<: *retry
     # plugins:
     #   <<: *go
 
   - label: ':sweating: Test'
-    branches: "!default"
+    branches: ["!default", "!v*.*.*"]
     command: echo make test
     <<: *retry
     # plugins:
     #   <<: *go
 
   - label: ':sonarqube: Sonarqube'
-    branches: "!default"
+    branches: ["!default", "!v*.*.*"]
     <<: *retry
     soft_fail:
       - exit_status: '*'
@@ -43,10 +43,10 @@ steps:
       <<: *sonarqube
 
   - wait: ~
-    branches: "!default"
+    branches: ["!default", "!v*.*.*"]
 
   - label: ':teacher: Integration Test'
-    branches: "!default"
+    branches: ["!default", "!v*.*.*"]
     command: echo make example
     <<: *retry
     # plugins:

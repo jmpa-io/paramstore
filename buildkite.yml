@@ -24,17 +24,17 @@ env:
   NOT_MAIN: build.branch != pipeline.default_branch
 
 steps:
-  # - label: ':jenkins: Lint'
-  #   command: make lint
-  #   <<: *retry
-  #   plugins:
-  #     <<: *go
+  - label: ':jenkins: Lint'
+    command: echo make lint
+    <<: *retry
+    # plugins:
+    #   <<: *go
 
-  # - label: ':sweating: Test'
-  #   command: make test
-  #   <<: *retry
-  #   plugins:
-  #     <<: *go
+  - label: ':sweating: Test'
+    command: echo make test
+    <<: *retry
+    # plugins:
+    #   <<: *go
 
   - label: ':sonarqube: Sonarqube'
     <<: *retry
@@ -46,21 +46,14 @@ steps:
   - wait
 
   - label: ':teacher: Integration Test'
-    command: make example
+    command: echo make example
     <<: *retry
+    # plugins:
+    #   <<: *go
 
-  - wait
-
-  # TODO add matrix
-  - label: ':sloth: hi'
-    command: go build
-    artifact_paths:
-      - "*.go"
-
-  - wait
+  - wait: ~
+    branches: "release/v*.*.0"
 
   - label: ':github: Release'
-    commands:
-      - buildkite-agent artifacts download *.go
-      - ./bin/release.sh $BUILDKITE_BRANCH
+    commands: make release
     branches: "release/v*.*.0"

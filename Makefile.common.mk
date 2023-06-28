@@ -17,6 +17,8 @@ COMMIT			= $(shell git describe --tags --always) # The git commit associated wit
 CMD_SOURCE		= $(shell find cmd/$* -type f) # The source for a command.
 BINARIES 		= $(patsubst %,dist/%,$(shell find cmd/* -maxdepth 0 -type d -exec basename {} \;)) # A list of ALL binaries in the repository.
 BINARIES_LINUX	= $(patsubst %,%-linux,$(BINARIES)) # A list of ALL linux binaries in the repository.
+# ---
+RELEASE_TAG ?= $(or $(BUILDKITE_VERSION),$(COMMIT)) # The tag to used when releasing this software.
 
 # Check dependencies (only in the pipeline).
 ifndef BUILDKITE
@@ -98,6 +100,10 @@ dist/%-linux: $(CMD_SOURCE)
 # ││││└─┐│
 # ┴ ┴┴└─┘└─┘
 
+.PHONY: release
+release: ## Creates a release.
+	gh release create "$(RELEASE_TAG)" --generate-notes
+
 .PHONY: update-template
 update-template: ## Pulls changes from obs-template into this repository.
 	git fetch template
@@ -111,11 +117,10 @@ clean: ## Removes generated files and folders, resetting this repository back to
 
 .PHONY: help
 help: ## Prints this help page.
-	$(info Available targets:)
+	@echo "Available targets:"
 	@awk '/^[a-zA-Z\-\_0-9%\/]+:/ { \
 		nb = sub( /^## /, "", helpMsg ); \
 		if(nb == 0) { helpMsg = $$0; nb = sub( /^[^:]*:.* ## /, "", helpMsg ); } \
-		if (nb) print $$1 helpMsg; \
+		if (nb) print "\033[35m" $$1 "\033[0m" helpMsg; \
 	} { helpMsg = $$0 }' $(MAKEFILE_LIST) \
-	| column -ts: \
-	| grep --color '^[^ ]*'
+	| column -ts:

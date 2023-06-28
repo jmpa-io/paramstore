@@ -5,6 +5,14 @@ retry: &retry
       permit_on_passed: true
 
 plugins:
+  go: &go
+    docker#v5.7.0:
+      image: docker.myob.com/devex/go:latest
+      volumes: [".:/go/src/app"]
+      workdir: "/go/src/app"
+      always-pull: true
+      propagate-environment: true
+
   sonarqube: &sonarqube
     myob-ops/sonarqube#v4.0.0:
       project_key: sonar-ops-and-arch:paramstore
@@ -19,10 +27,14 @@ steps:
   - label: ':jenkins: Lint'
     command: make lint
     <<: *retry
+    plugins:
+      <<: *go
 
-  - label: ':composer: Test'
+  - label: ':sweating: Test'
     command: make test
     <<: *retry
+    plugins:
+      <<: *go
 
   - label: ':sonarqube: Sonarqube'
     <<: *retry
@@ -34,7 +46,7 @@ steps:
   - wait
 
   - label: ':teacher: Integration Test'
-    command: make exmaple
+    command: make example
     <<: *retry
 
   - wait

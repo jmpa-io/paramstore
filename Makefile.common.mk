@@ -18,7 +18,7 @@ CMD_SOURCE		= $(shell find cmd/$* -type f) # The source for a command.
 BINARIES 		= $(patsubst %,dist/%,$(shell find cmd/* -maxdepth 0 -type d -exec basename {} \;)) # A list of ALL binaries in the repository.
 BINARIES_LINUX	= $(patsubst %,%-linux,$(BINARIES)) # A list of ALL linux binaries in the repository.
 # ---
-RELEASE_TAG ?= $(or $(BUILDKITE_VERSION),$(COMMIT)) # The tag to used when releasing this software.
+RELEASE_TAG ?= $(strip $(or $(BUILDKITE_BRANCH),v0.0.1)) # The tag to used when releasing this software.
 
 # Check dependencies (only in the pipeline).
 ifndef BUILDKITE
@@ -102,7 +102,8 @@ dist/%-linux: $(CMD_SOURCE)
 
 .PHONY: release
 release: ## Creates a release.
-	gh release create "$(RELEASE_TAG)" --generate-notes
+	@test -z "$(BUILDKITE)" || echo "~~~ :github: Creating release: $(RELEASE_TAG)"
+	gh release create $(RELEASE_TAG) --generate-notes
 
 .PHONY: update-template
 update-template: ## Pulls changes from obs-template into this repository.

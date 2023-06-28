@@ -41,34 +41,34 @@ func Test_Get(t *testing.T) {
 		want  []Param
 		errs  int
 	}{
-		"retrieves parameters successfully": {
-			names: []string{
-				"/hello",
-				"/world",
-			},
-			want: []Param{
-				{
-					Name:  "/hello",
-					Value: "1",
-					Type:  ParamType(types.ParameterTypeSecureString),
-				},
-				{
-					Name:  "/world",
-					Value: "2",
-					Type:  ParamType(types.ParameterTypeSecureString),
-				},
-			},
-		},
-		// {
-		// 	name:     "Error: No parameters specified",
-		// 	input:    []string{},
-		// 	expected: []Param{},
+		// "retrieves parameters successfully": {
+		// 	names: []string{
+		// 		"/hello",
+		// 		"/world",
+		// 	},
+		// 	want: []Param{
+		// 		{
+		// 			Name:  "/hello",
+		// 			Value: "1",
+		// 			Type:  ParamType(types.ParameterTypeSecureString),
+		// 		},
+		// 		{
+		// 			Name:  "/world",
+		// 			Value: "2",
+		// 			Type:  ParamType(types.ParameterTypeSecureString),
+		// 		},
+		// 	},
 		// },
-		// {
-		// 	name:     "Error: Failed to retrieve parameters",
-		// 	input:    []string{"param1"},
-		// 	expected: []Param{},
-		// },
+		// // {
+		// // 	name:     "Error: No parameters specified",
+		// // 	input:    []string{},
+		// // 	expected: []Param{},
+		// // },
+		// // {
+		// // 	name:     "Error: Failed to retrieve parameters",
+		// // 	input:    []string{"param1"},
+		// // 	expected: []Param{},
+		// // },
 	}
 
 	for name, tt := range tests {

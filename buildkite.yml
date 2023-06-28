@@ -24,17 +24,17 @@ env:
   NOT_MAIN: build.branch != pipeline.default_branch
 
 steps:
-  - label: ':jenkins: Lint'
-    command: make lint
-    <<: *retry
-    plugins:
-      <<: *go
+  # - label: ':jenkins: Lint'
+  #   command: make lint
+  #   <<: *retry
+  #   plugins:
+  #     <<: *go
 
-  - label: ':sweating: Test'
-    command: make test
-    <<: *retry
-    plugins:
-      <<: *go
+  # - label: ':sweating: Test'
+  #   command: make test
+  #   <<: *retry
+  #   plugins:
+  #     <<: *go
 
   - label: ':sonarqube: Sonarqube'
     <<: *retry

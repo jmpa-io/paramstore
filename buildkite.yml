@@ -25,27 +25,32 @@ env:
 
 steps:
   - label: ':jenkins: Lint'
+    if: $NOT_MAIN
     command: echo make lint
     <<: *retry
     # plugins:
     #   <<: *go
 
   - label: ':sweating: Test'
+    if: $NOT_MAIN
     command: echo make test
     <<: *retry
     # plugins:
     #   <<: *go
 
   - label: ':sonarqube: Sonarqube'
+    if: $NOT_MAIN
     <<: *retry
     soft_fail:
       - exit_status: '*'
     plugins:
       <<: *sonarqube
 
-  - wait
+  - wait: ~
+    if: $NOT_MAIN
 
   - label: ':teacher: Integration Test'
+    if: $NOT_MAIN
     command: echo make example
     <<: *retry
     # plugins:

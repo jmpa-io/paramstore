@@ -22,6 +22,13 @@ const (
 	Version = "head"
 )
 
+func init() {
+
+	// logger global config.
+	zerolog.TimestampFieldName = "ts"
+	zerolog.MessageFieldName = "msg"
+}
+
 func main() {
 
 	// setup log level.
@@ -42,9 +49,11 @@ func main() {
 
 	// setup handler.
 	h := &handler{
-		name:    Name,
-		version: Version,
-		env:     getEnv("ENVIRONMENT", "dev"),
+		config: config{
+			name:    Name,
+			version: Version,
+			env:     getEnv("ENVIRONMENT", "dev"),
+		},
 
 		logger: zerolog.New(os.Stderr).
 			With().Timestamp().Logger().Level(level),
@@ -54,21 +63,19 @@ func main() {
 	file := getEnv("TELEMETRY_FILE", "traces.txt")
 	f, err := os.Create(file)
 	if err != nil {
-		h.logger.Error().
+		h.logger.Fatal().
 			Err(err).
 			Str("name", file).
 			Msg("failed to create file")
-		os.Exit(1)
 	}
 	defer f.Close()
 
 	// setup exporter.
 	exp, err := newExporter(f)
 	if err != nil {
-		h.logger.Error().
+		h.logger.Fatal().
 			Err(err).
 			Msg("failed to setup exporter")
-		os.Exit(1)
 	}
 
 	// setup trace provider.
@@ -78,10 +85,9 @@ func main() {
 	)
 	defer func() {
 		if err := tp.Shutdown(context.Background()); err != nil {
-			h.logger.Error().
+			h.logger.Fatal().
 				Err(err).
 				Msg("failed to shutdown trace provider")
-			os.Exit(1)
 		}
 	}()
 	otel.SetTracerProvider(tp)
@@ -95,11 +101,10 @@ func main() {
 	// setup paramstore.
 	h.paramstoresvc, err = paramstore.New(ctx)
 	if err != nil {
-		h.logger.Error().
+		h.logger.Fatal().
 			Err(err).
 			Str("service", "paramstore").
 			Msg("failed to setup service")
-		os.Exit(1)
 	}
 
 	// run.

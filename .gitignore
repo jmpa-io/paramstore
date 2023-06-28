@@ -1,2 +1,19 @@
-example/example
+# ignore general files.
+.DS_Store
+.vscode/
+
+# ignore generated files.
+/out
+package.yml
+coverage.*
+dist/
+*.zip
+*.pem
 traces.txt
+
+# ignore test files.
+/test.sh
+
+# ignore compiled binaries in root.
+/main
+cmd/example/example

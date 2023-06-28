@@ -10,6 +10,10 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
+const (
+	Name = "paramstore"
+)
+
 // Client is the mechanism for someone to interact with this package.
 type Client struct {
 
@@ -33,13 +37,12 @@ type Client struct {
 func New(ctx context.Context, options ...Option) (*Client, error) {
 
 	// setup tracing.
-	name := "paramstore"
-	newCtx, span := otel.Tracer(name).Start(ctx, "New")
+	newCtx, span := otel.Tracer(Name).Start(ctx, "New")
 	defer span.End()
 
 	// setup client w/ default values.
 	c := &Client{
-		name: name,
+		name: Name,
 
 		awsRegion:      "ap-southeast-2",
 		batchSize:      10,

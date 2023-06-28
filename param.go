@@ -1,5 +1,11 @@
 package paramstore
 
+import (
+	"context"
+
+	"go.opentelemetry.io/otel"
+)
+
 // Param is a thin wrapper over ssm.Parameter.
 type Param struct {
 	Name      string    // the name of the parameter.
@@ -12,7 +18,13 @@ type Param struct {
 type Params []Param
 
 // NamesToSliceString converts a Params slice of names into a slice string.
-func (params Params) NamesToSliceString() (out []string) {
+func (params Params) NamesToSliceString(ctx context.Context) (out []string) {
+
+	// setup tracing.
+	_, span := otel.Tracer(Name).Start(ctx, "NamesToSliceString")
+	defer span.End()
+
+	// extract names.
 	for _, p := range params {
 		out = append(out, p.Name)
 	}

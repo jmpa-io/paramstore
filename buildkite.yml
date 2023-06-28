@@ -1,13 +1,43 @@
 ---
+retry: &retry
+  retry:
+    manual:
+      permit_on_passed: true
+
+plugins:
+  sonarqube: &sonarqube
+    myob-ops/sonarqube#v4.0.0:
+      project_key: sonar-ops-and-arch:paramstore
+      project_name: paramstore
+      sources: [.]
+
+env:
+  MAIN: build.branch == pipeline.default_branch
+  NOT_MAIN: build.branch != pipeline.default_branch
+
 steps:
+  - label: ':jenkins: Lint'
+    command: make lint
+    <<: *retry
 
-  # TODO lint.
+  - label: ':composer: Test'
+    command: make test
+    <<: *retry
 
-  # TODO vet.
+  - label: ':sonarqube: Sonarqube'
+    <<: *retry
+    soft_fail:
+      - exit_status: '*'
+    plugins:
+      <<: *sonarqube
 
-  # TODO test.
+  - wait
 
-  # TODO sonarqube.
+  - label: ':teacher: Integration Test'
+    command: make exmaple
+    <<: *retry
+
+  - wait
 
   # TODO add matrix
   - label: ':sloth: hi'
@@ -17,8 +47,8 @@ steps:
 
   - wait
 
-  - label: ':github: release'
-    commands: 
+  - label: ':github: Release'
+    commands:
       - buildkite-agent artifacts download *.go
       - ./bin/release.sh $BUILDKITE_BRANCH
     branches: "release/v*.*.0"

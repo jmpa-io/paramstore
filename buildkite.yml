@@ -52,8 +52,8 @@ steps:
     #   <<: *go
 
   - wait: ~
-    branches: "release/v*.*.0"
+    branches: "v*.*.0"
 
   - label: ':github: Release'
     commands: make release
-    branches: "release/v*.*.0"
+    branches: "v*.*.0"

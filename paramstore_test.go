@@ -86,7 +86,7 @@ var ssmGetter = func(ctx context.Context, params *ssm.GetParametersInput, optFns
 		out.Parameters[i] = types.Parameter{
 			Name:  &param.Name,
 			Value: &param.Value,
-			Type:  types.ParameterType(param.Value),
+			Type:  types.ParameterType(param.Type),
 		}
 	}
 	return out, nil

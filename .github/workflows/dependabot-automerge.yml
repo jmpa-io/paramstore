@@ -1,9 +1,9 @@
-name: Dependabot auto-merge.
+name: Dependabot Auto-merge
 on:
   pull_request:
     types: [opened, synchronize]
-    author:
-      - 'dependabot[bot]'
+    repository_dispatch:
+      types: [update]
 
 permissions:
   contents: write
@@ -13,4 +13,5 @@ permissions:
 
 jobs:
   dependabot-automerge:
+    if: startsWith(github.head_ref, 'dependabot/')
     uses: myob-ops/dependabot-automerge/.github/workflows/dependabot-automerge.yml@main

@@ -39,6 +39,8 @@ steps:
     <<: *retry
     soft_fail:
       - exit_status: '*'
+    agents:
+      queue: devex-dev
     plugins:
       <<: *sonarqube
 

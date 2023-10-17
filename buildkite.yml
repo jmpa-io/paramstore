@@ -26,25 +26,21 @@ steps:
     <<: *retry
     agents:
       queue: default-dev
-    # plugins:
-    #   <<: *go
+    plugins:
+      <<: *go
 
   - label: ':sweating: Test'
     branches: ["!default", "!v*.*.*"]
     command: echo make test
     <<: *retry
-    agents:
-      queue: default-dev
-    # plugins:
-    #   <<: *go
+    plugins:
+      <<: *go
 
   - label: ':sonarqube: Sonarqube'
     branches: ["!default", "!v*.*.*"]
     <<: *retry
     soft_fail:
       - exit_status: '*'
-    agents:
-      queue: default-dev
     plugins:
       <<: *sonarqube
 
@@ -55,8 +51,8 @@ steps:
     branches: ["!default", "!v*.*.*"]
     command: echo make example
     <<: *retry
-    # plugins:
-    #   <<: *go
+    plugins:
+      <<: *go
 
   - wait: ~
     branches: "v*.*.*"

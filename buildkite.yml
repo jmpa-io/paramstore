@@ -7,7 +7,7 @@ retry: &retry
 plugins:
   go: &go
     docker#v5.7.0:
-      image: docker.myob.com/devex/go:latest
+      image: docker.cloudsmith.com/devex/go:latest
       volumes: [".:/go/src/app"]
       workdir: "/go/src/app"
       always-pull: true

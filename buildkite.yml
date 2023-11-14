@@ -8,7 +8,6 @@ plugins:
   login: &login
     docker-login#v2.1.0:
       username: delivery-platform-${ENVIRONMENT:-prod}
-      password-env: TOKEN
 
   go: &go
     docker#v5.9.0:

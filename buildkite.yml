@@ -5,6 +5,11 @@ retry: &retry
       permit_on_passed: true
 
 plugins:
+  login: &login
+    docker-login#v2.1.0:
+      username: delivery-platform-${ENVIRONMENT:-prod}
+      password-env: TOKEN
+
   go: &go
     docker#v5.9.0:
       image: docker.cloudsmith.io/myob/devex/go:latest
@@ -26,6 +31,9 @@ steps:
     <<: *retry
     agents:
       queue: default-dev
+    plugins:
+      <<: *login
+      <<: *go
 
   - label: ':sweating: Test'
     branches: ["!default", "!v*.*.*"]

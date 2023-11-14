@@ -6,11 +6,10 @@ retry: &retry
 
 plugins:
   go: &go
-    docker#v5.7.0:
+    docker#v5.9.0:
       image: docker.cloudsmith.io/myob/devex/go:latest
       volumes: [".:/go/src/app"]
       workdir: "/go/src/app"
-      always-pull: true
       propagate-environment: true
 
   sonarqube: &sonarqube

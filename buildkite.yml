@@ -10,7 +10,6 @@ plugins:
       image: docker.cloudsmith.io/myob/devex/go:latest
       volumes: [".:/go/src/app"]
       workdir: "/go/src/app"
-      always-pull: true
       propagate-environment: true
 
   sonarqube: &sonarqube

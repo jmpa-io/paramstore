@@ -10,6 +10,7 @@ plugins:
       image: docker.cloudsmith.io/myob/devex/go:latest
       volumes: [".:/go/src/app"]
       workdir: "/go/src/app"
+      always-pull: true
       propagate-environment: true
 
   sonarqube: &sonarqube
@@ -21,12 +22,10 @@ plugins:
 steps:
   - label: ':jenkins: Lint'
     branches: ["!default", "!v*.*.*"]
-    command: echo make lint
+    command: docker pull docker.cloudsmith.io/myob/devex/go:latest
     <<: *retry
     agents:
       queue: default-dev
-    plugins:
-      <<: *go
 
   - label: ':sweating: Test'
     branches: ["!default", "!v*.*.*"]

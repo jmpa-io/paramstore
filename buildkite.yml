@@ -5,9 +5,10 @@ retry: &retry
       permit_on_passed: true
 
 plugins:
-  login: &login
-    docker-login#v2.1.0:
-      username: delivery-platform-${ENVIRONMENT:-prod}
+  # testing docker auth with the environment hook, this plugin is not needed.
+  # login: &login
+  #   docker-login#v2.1.0:
+  #     username: delivery-platform-${ENVIRONMENT:-prod}
 
   go: &go
     docker#v5.9.0:

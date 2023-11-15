@@ -27,7 +27,7 @@ plugins:
 steps:
   - label: ':jenkins: Lint'
     branches: ["!default", "!v*.*.*"]
-    command: docker pull docker.cloudsmith.io/myob/devex/go:latest
+    command: make lint
     <<: *retry
     agents:
       queue: default-dev
@@ -37,7 +37,7 @@ steps:
 
   - label: ':sweating: Test'
     branches: ["!default", "!v*.*.*"]
-    command: echo make test
+    command: make test
     <<: *retry
     plugins:
       <<: *go

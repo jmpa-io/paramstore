@@ -32,7 +32,7 @@ steps:
     agents:
       queue: default-dev
     plugins:
-      <<: *login
+      # <<: *login
       <<: *go
 
   - label: ':sweating: Test'

@@ -16,9 +16,21 @@ const (
 
 // iSSMClient is an interface for ssm.Client.
 type iSSMClient interface {
-	GetParameters(ctx context.Context, params *ssm.GetParametersInput, optFns ...func(*ssm.Options)) (*ssm.GetParametersOutput, error)
-	PutParameter(ctx context.Context, params *ssm.PutParameterInput, optFns ...func(*ssm.Options)) (*ssm.PutParameterOutput, error)
-	DeleteParameters(ctx context.Context, params *ssm.DeleteParametersInput, optFns ...func(*ssm.Options)) (*ssm.DeleteParametersOutput, error)
+	GetParameters(
+		ctx context.Context,
+		params *ssm.GetParametersInput,
+		optFns ...func(*ssm.Options),
+	) (*ssm.GetParametersOutput, error)
+	PutParameter(
+		ctx context.Context,
+		params *ssm.PutParameterInput,
+		optFns ...func(*ssm.Options),
+	) (*ssm.PutParameterOutput, error)
+	DeleteParameters(
+		ctx context.Context,
+		params *ssm.DeleteParametersInput,
+		optFns ...func(*ssm.Options),
+	) (*ssm.DeleteParametersOutput, error)
 }
 
 // Client is the mechanism for someone to interact with this package.
@@ -31,10 +43,10 @@ type Client struct {
 	ssmsvc iSSMClient
 
 	// aws.
-	awsRegion      string // the aws region to use when doing things with paramstore.
-	batchSize      int    // batch size used when retrieving parameters.
-	withDecryption bool   // decrypts the parameters when retrieving them.
-	keyId          string // the KMS key to use when encrypting and decrypting parameters from paramstore.
+	awsRegion      string // The aws region to use when doing things with paramstore.
+	batchSize      int    // The batch size used when retrieving parameters.
+	withDecryption bool   // This decrypts parameters when retrieving them.
+	keyId          string // The KMS key to use when encrypting and decrypting parameters from paramstore.
 
 	// misc.
 	logger zerolog.Logger

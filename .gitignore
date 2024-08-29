@@ -1,4 +1,5 @@
 # ignore general files.
+<<<<<<< HEAD
 .DS_store
 
 # ignore test files.
@@ -13,3 +14,23 @@ super-linter.log
 /bin/[0-9][0-9]-*.sh
 /cf/[0-9][0-9]-*.yml
 /.github/templates/[0-9][0-9]-*
+=======
+.DS_Store
+.vscode/
+
+# ignore generated files.
+/out
+package.yml
+coverage.*
+dist/
+*.zip
+*.pem
+traces.txt
+
+# ignore test files.
+/test.sh
+
+# ignore compiled binaries in root.
+/main
+cmd/example/example
+>>>>>>> main

@@ -1,0 +1,17 @@
+name: Dependabot Auto-merge
+on:
+  pull_request:
+    types: [opened, synchronize]
+    repository_dispatch:
+      types: [update]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  statuses: read
+
+jobs:
+  dependabot-automerge:
+    if: startsWith(github.head_ref, 'dependabot/')
+    uses: myob-ops/dependabot-automerge/.github/workflows/dependabot-automerge.yml@main

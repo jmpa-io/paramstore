@@ -1,161 +1,153 @@
 package paramstore
 
 import (
+	"context"
 	"fmt"
-	"os"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
+	multierror "github.com/hashicorp/go-multierror"
+	"go.opentelemetry.io/otel"
 )
 
-type handler struct {
-	ssmsvc *ssm.SSM
-}
+// Get retrieves one or more params from paramstore.
+func (c *Client) Get(ctx context.Context, names ...string) (out []Param, errs error) {
 
-// sets up the handler used in public functions in this package.
-func defaultHandler() (*handler, error) {
+	// setup tracing.
+	newCtx, span := otel.Tracer(c.name).Start(ctx, "Get")
+	defer span.End()
 
-	// which region?
-	region := os.Getenv("AWS_DEFAULT_REGION")
-	if region == "" {
-		region = os.Getenv("AWS_REGION")
-	}
-	if region == "" {
-		region = "ap-southeast-2"
-	}
+	// retrieve params in batches.
+	var invalid []string
+	for i := 0; i < len(names); i += c.batchSize {
 
-	// setup session.
-	sess, err := session.NewSessionWithOptions(session.Options{
-		Config: aws.Config{Region: aws.String(region)},
-	})
-	if err != nil {
-		return nil, Error{fmt.Sprintf("failed to setup aws session: %v", err)}
-	}
-
-	// return handler.
-	return &handler{
-		ssmsvc: ssm.New(sess, nil),
-	}, nil
-}
-
-// Param represents a param stored in paramstore.
-type Param struct {
-	Name  string
-	Value string
-	Type  string
-}
-
-type Params []Param
-
-// retrieves params for the given paths from paramstore.
-func (h *handler) Get(paths ...string) (Params, error) {
-
-	// check input.
-	if len(paths) == 0 {
-		return nil, Error{"missing paths"}
-	}
-
-	// read params.
-	var params Params
-	var invalid []*string
-	size := 10 // size of chunk.
-	for b := 0; b < len(paths); b += size {
-		n := b + size // number of params to read at a time.
-		if n > len(paths) {
-			n = len(paths)
+		// determine rolling batch size.
+		size := i + c.batchSize
+		if size > len(names) {
+			size = len(names)
 		}
 
 		// retrieve params.
-		out, err := h.ssmsvc.GetParameters(&ssm.GetParametersInput{
-			Names:          aws.StringSlice(paths[b:n]),
-			WithDecryption: aws.Bool(true),
-		})
+		in := &ssm.GetParametersInput{
+			Names:          names[i:size],
+			WithDecryption: &c.withDecryption,
+		}
+		resp, err := c.ssmsvc.GetParameters(newCtx, in)
 		if err != nil {
-			return nil, Error{fmt.Sprintf("failed to read params from paramstore: %v", err)}
+			c.logger.Error().
+				Err(err).
+				Strs("names", in.Names).
+				Bool("decryption", *in.WithDecryption).
+				Msg("failed to get parameters")
+			errs = multierror.Append(errs, err)
+			continue
 		}
 
-		// parse params.
-		for _, p := range out.Parameters {
-			if p.Value == nil { // slim chance the Value could missing.
+		// parse params from response.
+		for _, p := range resp.Parameters {
+			// there's a very slim change the Value is missing.
+			if p.Value == nil {
 				p.Value = aws.String("")
 			}
-			params = append(params, Param{
+			out = append(out, Param{
 				Name:  *p.Name,
 				Value: *p.Value,
-				Type:  *p.Type,
+				Type:  ParamType(p.Type),
 			})
 		}
-		invalid = append(invalid, out.InvalidParameters...)
+		invalid = append(invalid, resp.InvalidParameters...)
 	}
 
-	// any invalid params?
+	// return params + errs.
 	if len(invalid) > 0 {
-		return params, missingErr{invalid}
-	}
-	return params, nil
-}
-
-// Get retrieves a single param from paramstore, for the given path.
-func Get(path string) (string, error) {
-
-	// setup handler.
-	h, err := defaultHandler()
-	if err != nil {
-		return "", Error{fmt.Sprintf("failed to default handler: %v", err)}
-	}
-
-	// retrieve param.
-	params, err := h.Get(path)
-	if err != nil {
-		return "", err
-	}
-
-	// multiple params returned?
-	if len(params) != 1 {
-		return "", Error{fmt.Sprintf("%s matched %d parameters", path, len(params))}
-	}
-	return params[0].Value, nil
-}
-
-// GetPaths retrieves multiple params from paramstore at a time, for the given paths.
-func GetPaths(paths ...string) (Params, error) {
-
-	// setup handler.
-	h, err := defaultHandler()
-	if err != nil {
-		return nil, Error{fmt.Sprintf("failed to default handler: %v", err)}
-	}
-
-	// retrieve + return params.
-	return h.Get(paths...)
-}
-
-// uploads the given param to the given path.
-func Put(params ...Param) error {
-
-	// check input.
-	if len(params) == 0 {
-		return Error{"missing params"}
-	}
-
-	// setup handler.
-	h, err := defaultHandler()
-	if err != nil {
-		return Error{fmt.Sprintf("failed to default handler: %v", err)}
-	}
-
-	// put params.
-	for _, p := range params {
-		_, err := h.ssmsvc.PutParameter(&ssm.PutParameterInput{
-			Name:      aws.String(p.Name),
-			Value:     aws.String(p.Value),
-			Type:      aws.String(p.Type),
-			Overwrite: aws.Bool(true),
-		})
-		if err != nil {
-			return Error{fmt.Sprintf("failed to put parameter: %v", err)}
+		for _, i := range invalid {
+			c.logger.Warn().
+				Str("param", i).
+				Msg("found invalid parameter")
+			errs = multierror.Append(errs, fmt.Errorf("%q is an invalid parameter", i))
 		}
 	}
-	return nil
+	return out, errs
+}
+
+// Put uploads one or more params to paramstore.
+func (c *Client) Put(ctx context.Context, params Params) (errs error) {
+
+	// setup tracing.
+	newCtx, span := otel.Tracer(c.name).Start(ctx, "Put")
+	defer span.End()
+
+	for _, p := range params {
+
+		// setup input.
+		in := &ssm.PutParameterInput{
+			Name:      aws.String(p.Name),
+			Value:     aws.String(p.Value),
+			Type:      types.ParameterType(p.Type),
+			Overwrite: aws.Bool(p.Overwrite),
+		}
+
+		// add key id, if available.
+		if c.keyId != "" {
+			in.KeyId = aws.String(c.keyId)
+		}
+
+		// put parameter.
+		_, err := c.ssmsvc.PutParameter(newCtx, in)
+		if err != nil {
+			c.logger.Error().
+				Err(err).
+				Str("name", *in.Name).
+				Str("type", string(in.Type)).
+				Bool("overwrite", *in.Overwrite).
+				Msg("failed to put parameter")
+			errs = multierror.Append(errs, err)
+		}
+	}
+	return errs
+}
+
+// Delete deletes one or more params from paramstore.
+func (c *Client) Delete(ctx context.Context, names ...string) (errs error) {
+
+	// setup tracing.
+	newCtx, span := otel.Tracer(c.name).Start(ctx, "Delete")
+	defer span.End()
+
+	// retrieve params in batches.
+	var invalid []string
+	for i := 0; i < len(names); i += c.batchSize {
+
+		// determine rolling batch size.
+		size := i + c.batchSize
+		if size > len(names) {
+			size = len(names)
+		}
+
+		// delete params.
+		in := &ssm.DeleteParametersInput{
+			Names: names[i:size],
+		}
+		resp, err := c.ssmsvc.DeleteParameters(newCtx, in)
+		if err != nil {
+			c.logger.Error().
+				Err(err).
+				Strs("names", in.Names).
+				Msg("failed to delete parameters")
+			errs = multierror.Append(errs, err)
+		}
+		invalid = append(invalid, resp.InvalidParameters...)
+	}
+
+	// return errs.
+	if len(invalid) > 0 {
+		for _, i := range invalid {
+			c.logger.Warn().
+				Str("param", i).
+				Msg("found invalid parameter")
+			errs = multierror.Append(errs, fmt.Errorf("%q is an invalid parameter"))
+		}
+	}
+	return errs
 }

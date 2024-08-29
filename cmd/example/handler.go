@@ -50,20 +50,20 @@ func (h *handler) run(ctx context.Context) {
 	l := h.logger.With().Int("count", len(params)).Logger()
 
 	// upload params.
-	if errs := h.paramstoresvc.Put(newCtx, params); errs != 0 {
-		l.Fatal().Int("errors", errs).Msg("failed to upload params")
+	if errs := h.paramstoresvc.Put(newCtx, params); errs != nil {
+		l.Fatal().Err(errs).Msg("failed to upload params")
 	}
 	l.Debug().Msg("successfully uploaded params")
 
 	// download params.
-	if _, errs := h.paramstoresvc.Get(newCtx, params.NamesToSliceString(newCtx)...); errs != 0 {
-		l.Fatal().Int("errors", errs).Msg("failed to download params")
+	if _, errs := h.paramstoresvc.Get(newCtx, params.NamesToSliceString(newCtx)...); errs != nil {
+		l.Fatal().Err(errs).Msg("failed to download params")
 	}
 	l.Debug().Msg("successfully downloaded params")
 
 	// delete params.
-	if errs := h.paramstoresvc.Delete(newCtx, params.NamesToSliceString(newCtx)...); errs != 0 {
-		l.Fatal().Int("errors", errs).Msg("failed to delete params")
+	if errs := h.paramstoresvc.Delete(newCtx, params.NamesToSliceString(newCtx)...); errs != nil {
+		l.Fatal().Err(errs).Msg("failed to delete params")
 	}
 	l.Debug().Msg("successfully deleted params")
 }

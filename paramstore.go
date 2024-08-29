@@ -2,15 +2,17 @@ package paramstore
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
+	multierror "github.com/hashicorp/go-multierror"
 	"go.opentelemetry.io/otel"
 )
 
 // Get retrieves one or more params from paramstore.
-func (c *Client) Get(ctx context.Context, names ...string) (out []Param, errs int) {
+func (c *Client) Get(ctx context.Context, names ...string) (out []Param, errs error) {
 
 	// setup tracing.
 	newCtx, span := otel.Tracer(c.name).Start(ctx, "Get")
@@ -38,7 +40,7 @@ func (c *Client) Get(ctx context.Context, names ...string) (out []Param, errs in
 				Strs("names", in.Names).
 				Bool("decryption", *in.WithDecryption).
 				Msg("failed to get parameters")
-			errs++
+			errs = multierror.Append(errs, err)
 			continue
 		}
 
@@ -63,14 +65,14 @@ func (c *Client) Get(ctx context.Context, names ...string) (out []Param, errs in
 			c.logger.Warn().
 				Str("param", i).
 				Msg("found invalid parameter")
-			errs++
+			errs = multierror.Append(errs, fmt.Errorf("%q is an invalid parameter", i))
 		}
 	}
 	return out, errs
 }
 
 // Put uploads one or more params to paramstore.
-func (c *Client) Put(ctx context.Context, params Params) (errs int) {
+func (c *Client) Put(ctx context.Context, params Params) (errs error) {
 
 	// setup tracing.
 	newCtx, span := otel.Tracer(c.name).Start(ctx, "Put")
@@ -100,14 +102,14 @@ func (c *Client) Put(ctx context.Context, params Params) (errs int) {
 				Str("type", string(in.Type)).
 				Bool("overwrite", *in.Overwrite).
 				Msg("failed to put parameter")
-			errs++
+			errs = multierror.Append(errs, err)
 		}
 	}
 	return errs
 }
 
 // Delete deletes one or more params from paramstore.
-func (c *Client) Delete(ctx context.Context, names ...string) (errs int) {
+func (c *Client) Delete(ctx context.Context, names ...string) (errs error) {
 
 	// setup tracing.
 	newCtx, span := otel.Tracer(c.name).Start(ctx, "Delete")
@@ -133,7 +135,7 @@ func (c *Client) Delete(ctx context.Context, names ...string) (errs int) {
 				Err(err).
 				Strs("names", in.Names).
 				Msg("failed to delete parameters")
-			errs++
+			errs = multierror.Append(errs, err)
 		}
 		invalid = append(invalid, resp.InvalidParameters...)
 	}
@@ -144,7 +146,7 @@ func (c *Client) Delete(ctx context.Context, names ...string) (errs int) {
 			c.logger.Warn().
 				Str("param", i).
 				Msg("found invalid parameter")
-			errs++
+			errs = multierror.Append(errs, fmt.Errorf("%q is an invalid parameter"))
 		}
 	}
 	return errs

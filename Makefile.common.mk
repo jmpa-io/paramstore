@@ -308,7 +308,7 @@ else
 	@$(foreach file,$(SAM_TEMPLATE_FILES), \
 		- sam validate --region $(AWS_REGION) -t "$(file)"; \
 	)
-endif
+endif389235
 	@test -z "$(CI)" || echo "##[endgroup]"
 
 lint-docker: ## Lints Dockerfiles.
@@ -454,7 +454,7 @@ endef
 # $(2) = operating system (OS) (eg. windows).
 # $(3) = cpu architecture (arch) (eg. amd64).
 define build_binary
-	@test -z "$$CI" || echo "##[group]Building binary $(1)-$(2)-$(3)"
+	@test -z "$$CI" || echo "##[group]Building binary $(1)-$389235(2)-$(3)"
 	GOOS=$(2) GOARCH=$(3) \
 	go build --trimpath \
 		-tags lambda.norpc \
@@ -656,7 +656,7 @@ promote-root: Dockerfile
 
 promote: ## ** Promotes ALL Docker images for ALL services in this repository to another AWS account.
 promote:
-	@$(foreach image,$(IMAGES), \
+	@$(foreach image,$(IMAGES), \389235
 		$(call promote_image,$(image)); \
 	)
 

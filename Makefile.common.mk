@@ -46,6 +46,18 @@ $(patsubst $(PROJECT),image-root, \
 )
 endef
 
+# Replaces the '.' character with the '-' character, for when names of resources
+# are sensitive or require specific regex patterns (such as website urls used
+# as the name for a GitHub repository).
+define replace_dots_with_dashes
+$(subst .,-,$(1))
+endef
+
+# Determines if the given string should have added ".exe" to the end of it.
+define add_windows_suffix
+$(if $(findstring windows,$(1)),.exe,)
+endef
+
 
 #
 # ┬  ┬┌─┐┬─┐┬┌─┐┌┐ ┬  ┌─┐┌─┐
@@ -110,6 +122,9 @@ SH_FILES := $(shell find . $(FILTER_IGNORE_SUBMODULES) -name "*.sh" -type f 2>/d
 # All Go files in the repository (excluding submodules).
 GO_FILES := $(shell find . $(FILTER_IGNORE_SUBMODULES) -name "*.go" -type f 2>/dev/null)
 
+# All C++ files in the repository (excluding submodules).
+CPP_FILES := $(shell find . $(FILTER_IGNORE_SUBMODULES) -name "*.cpp" -type f 2>/dev/null)
+
 # All Cloudformation templates & SAM templates in the './cf' directory (excluding submodules).
 TEMPLATE_FILES := $(shell find ./cf $(FILTER_IGNORE_SUBMODULES) -name "template.yml" -type f 2>/dev/null)
 
@@ -150,7 +165,7 @@ TAGS ?= $(COMMIT) latest
 # ---
 
 # The Cloudformation stack name used when deploying a Cloudformation stack..
-STACK_NAME = $(PROJECT)-$*
+STACK_NAME = $(call replace_dots_with_dashes,$(PROJECT)-$*-$(ENVIRONMENT))
 
 # The region used when deploying a Cloudformation stack, or other aws-cli
 # commands, in the authed AWS account.
@@ -164,8 +179,12 @@ ECR = $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 
 # The name of a generic S3 bucket in the AWS Account for storing artifacts.
 ifndef BUCKET
-BUCKET = $(shell aws ssm get-parameter --name "/common/artifacts-bucket" --query 'Parameter.Value' --output text)
+BUCKET = $(shell aws ssm get-parameter --name "/common/artifacts-bucket" --query 'Parameter.Value' --output text 2>/dev/null)
 endif
+
+# The path to the `.params` file. This doesn't check if it exists, it's just
+# the expected path this file MAY exist at.
+PARAMS_FILE ?= cf/.params/$(ENVIRONMENT).json
 
 # ---
 
@@ -182,10 +201,10 @@ PROMOTE_FROM_ECR = $(PROMOTE_FROM_AWS_ACCOUNT_ID).dkr.ecr.$(PROMOTE_AWS_REGION).
 # ---
 
 # The paths to any given Git submodules found in this repository.
-SUBMODULES := $(shell git config --file $(shell while [ ! -d .git ]; do cd ..; done; pwd)/.gitmodules --get-regexp path | awk '{ print $$2 }')
+GIT_SUBMODULES := $(shell git config --file $(shell while [ ! -d .git ]; do cd ..; done; pwd)/.gitmodules --get-regexp path | awk '{ print $$2 }')
 
 # A filter for ignoring Git submodules when using 'find' commands in this Makefile.
-FILTER_IGNORE_SUBMODULES = $(foreach module,$(SUBMODULES),-not \( -path "./$(module)" -o -path "./$(module)/*" \))
+FILTER_IGNORE_SUBMODULES = $(foreach module,$(GIT_SUBMODULES),-not \( -path "./$(module)" -o -path "./$(module)/*" \))
 
 # ---
 
@@ -261,6 +280,7 @@ lint: ## ** Lints everything.
 lint: \
 	lint-sh \
 	lint-go \
+	lint-cpp \
 	lint-cf \
 	lint-sam \
 	lint-docker \
@@ -286,6 +306,16 @@ else
 endif
 	@test -z "$(CI)" || echo "##[endgroup]"
 
+lint-cpp: ## Lints C++ files.
+lint-cpp:
+	@test -z "$(CI)" || echo "##[group]Linting C++."
+ifeq ($(CPP_FILES),)
+	@echo "No *.cpp files to lint."
+else
+	cpplint --filter=-legal/copyright $(CPP_FILES)
+endif
+	@test -z "$(CI)" || echo "##[endgroup]"
+
 lint-cf: ## Lints CF templates.
 lint-cf:
 	@test -z "$(CI)" || echo "##[group]Linting CF templates."
@@ -308,7 +338,7 @@ else
 	@$(foreach file,$(SAM_TEMPLATE_FILES), \
 		- sam validate --region $(AWS_REGION) -t "$(file)"; \
 	)
-endif389235
+endif
 	@test -z "$(CI)" || echo "##[endgroup]"
 
 lint-docker: ## Lints Dockerfiles.
@@ -336,7 +366,8 @@ endif
 	@test -z "$(CI)" || echo "##[endgroup]"
 
 PHONY += lint \
-				 lint-sh lint-go lint-cf lint-sam lint-docker lint-workflows
+				 lint-sh lint-go lintcpp \
+				 lint-cf lint-sam lint-docker lint-workflows
 
 
 #
@@ -422,13 +453,15 @@ PHONY += code-coverage \
 
 
 #
-# ┌┐ ┬┌┐┌┌─┐┬─┐┬┌─┐┌─┐
-# ├┴┐││││├─┤├┬┘│├┤ └─┐
-# └─┘┴┘└┘┴ ┴┴└─┴└─┘└─┘o
+# ┌─┐┬─┐┌─┐  ┌┐ ┬┌┐┌┌─┐┬─┐┬┌─┐┌─┐
+# ├─┘├┬┘├┤───├┴┐││││├─┤├┬┘│├┤ └─┐
+# ┴  ┴└─└─┘  └─┘┴┘└┘┴ ┴┴└─┴└─┘└─┘o
 #
 
-# A list of directories under './cmd' that contain 'main.go' (excluding submodules).
-CMD_SERVICES := $(shell find cmd/* $(FILTER_IGNORE_SUBMODULES) -name main.go -maxdepth 1 -type f -exec dirname {} \; 2>/dev/null | awk -F/ '{$$1=""; sub(/^ /, ""); print $$0}')
+# A list of supported programming languages for building binaries in this Makefile.
+SUPPORTED_LANGUAGES_FOR_BUILDING_BINARIES = \
+	cpp \
+	go
 
 dist: # Creates the root output directory.
 dist:
@@ -438,23 +471,109 @@ dist/%: # Creates the output directory, for a given service.
 dist/%: dist
 	@mkdir -p dist/$*
 
+binary-%-%-%: ## Creates a binary for the given service $(1), operating system $(2), and CPU architecture $(3).
+binary-%-%-%: #	 NOTE: this target is 'dummy' and is just for adding a comment to the help page.
+
+PHONY += binary-%-%-% dist/%
+
+#
+# ┌┐ ┬┌┐┌┌─┐┬─┐┬┌─┐┌─┐       ┌─┐
+# ├┴┐││││├─┤├┬┘│├┤ └─┐  ───  │  ++
+# └─┘┴┘└┘┴ ┴┴└─┴└─┘└─┘       └─┘  o
+#
+
+# A list of directories under './cmd/*' that contain 'main.cpp' (excluding submodules).
+CMD_SERVICES_CPP := $(shell find cmd/* $(FILTER_IGNORE_SUBMODULES) -name main.cpp -maxdepth 1 -type f -exec dirname {} \; 2>/dev/null | awk -F/ '{$$1=""; sub(/^ /, ""); print $$0}')
+
+# A function to set the C++ compiler based on BUILDING_OS and BUILDING_ARCH.
+define set_cpp_compiler
+ifeq ($(BUILDING_OS), linux)
+    ifeq ($(BUILDING_ARCH), amd64)
+        CPP_COMPILER := g++
+    else ifeq ($(BUILDING_ARCH), arm64)
+        CPP_COMPILER := aarch64-linux-gnu-g++
+    endif
+else ifeq ($(BUILDING_OS), darwin)
+    ifeq ($(BUILDING_ARCH), amd64)
+        CPP_COMPILER := o64-clang++
+    else ifeq ($(BUILDING_ARCH), arm64)
+        CPP_COMPILER := arm-none-linux-gnueabihf-g++
+    endif
+else ifeq ($(BUILDING_OS), windows)
+    ifeq ($(BUILDING_ARCH), amd64)
+        CPP_COMPILER := x86_64-w64-mingw32-g++
+    else ifeq ($(BUILDING_ARCH), arm64)
+				# NOTE: waiting for this to be merged: https://github.com/Windows-on-ARM-Experiments/mingw-woarm64-build/
+        CPP_COMPILER := g++
+    endif
+endif
+endef
+
+print-cpp-version: # Prints the install C++ compiler version.
+print-cpp-version:
+	$(eval $(call set_cpp_compiler))
+	@test -z "$(CI)" || echo "##[group]C++ compiler version ($(CPP_COMPILER))."
+	@$(CPP_COMPILER) --version
+	@test -z "$(CI)" || echo "##[endgroup]"
+
+# Builds a C++ binary for the given service, OS, and arch.
+# $(1) = service (eg. hello).
+# $(2) = operating system (OS) (eg. windows).
+# $(3) = cpu architecture (arch) (eg. amd64).
+define build_binary_cpp
+	$(eval $(call set_cpp_compiler))
+	@test -z "$$CI" || echo "##[group]Building binary $(1)-$(2)-$(3)."
+	$(CPP_COMPILER) cmd/$*/*.cpp -Wall -Wextra -o dist/$(1)/$(1)-$(2)-$(3)$(call add_windows_suffix,$(2))
+	@test -z "$$CI" || echo "##[endgroup]"
+endef
+
+binary-cpp-%: ## Create a C++ binary for the given service, using $(BUILDING_OS) and $(BUILDING_ARCH).
+binary-cpp-%: cmd/%/main.cpp dist/% print-cpp-version
+	$(call build_binary_cpp,$*,$(BUILDING_OS),$(BUILDING_ARCH))
+
+build-cpp-%: # Builds & executes the given C++ service using the host $(OS) & $(ARCH).
+build-cpp-%: binary-cpp-%
+	@dist/$*/$*-$(OS)-$(ARCH)$(call add_windows_suffix, $(OS))
+
+binaries-cpp-%: ## Creates a C++ binary for all supported OS and ARCH for the given service.
+binaries-cpp-%:
+	@$(foreach os,$(SUPPORTED_OPERATING_SYSTEMS), \
+		$(foreach arch,$(SUPPORTED_ARCHITECTURES), \
+			BUILDING_OS=$(os) BUILDING_ARCH=$(arch) \
+			$(MAKE) --no-print-directory binary-cpp-$*; \
+		) \
+	)
+
+binaries-cpp: ## Builds C++ binaries for every C++ service.
+binaries-cpp:
+	@$(foreach service,$(CMD_SERVICES_CPP), \
+		$(MAKE) --no-print-directory binaries-cpp-$(service); \
+	)
+
+PHONY += print-cpp-version
+
+
+#
+# ┌┐ ┬┌┐┌┌─┐┬─┐┬┌─┐┌─┐       ┌─┐┌─┐
+# ├┴┐││││├─┤├┬┘│├┤ └─┐  ───  │ ┬│ │
+# └─┘┴┘└┘┴ ┴┴└─┴└─┘└─┘       └─┘└─┘o
+#
+
+# A list of directories under './cmd/*' that contain 'main.go' (excluding submodules).
+CMD_SERVICES_GO := $(shell find cmd/* $(FILTER_IGNORE_SUBMODULES) -name main.go -maxdepth 1 -type f -exec dirname {} \; 2>/dev/null | awk -F/ '{$$1=""; sub(/^ /, ""); print $$0}')
+
 print-go-version: # Prints the installed Go version.
 print-go-version:
 	@test -z "$(CI)" || echo "##[group]Go version."
 	@go version
 	@test -z "$(CI)" || echo "##[endgroup]"
 
-# Determines if the given string should add ".exe" to the end of it.
-define add_windows_suffix
-$(if $(findstring windows,$(1)),.exe,)
-endef
-
 # Builds a Go binary for the given service, OS, and arch.
 # $(1) = service (eg. hello).
 # $(2) = operating system (OS) (eg. windows).
 # $(3) = cpu architecture (arch) (eg. amd64).
-define build_binary
-	@test -z "$$CI" || echo "##[group]Building binary $(1)-$389235(2)-$(3)"
+define build_binary_go
+	@test -z "$$CI" || echo "##[group]Building binary $(1)-$(2)-$(3)."
 	GOOS=$(2) GOARCH=$(3) \
 	go build --trimpath \
 		-tags lambda.norpc \
@@ -463,59 +582,45 @@ define build_binary
 	@test -z "$$CI" || echo "##[endgroup]"
 endef
 
-# Creates a target for building a Go binary for the given service, OS, and arch.
-# $(1) = service (eg. hello).
-# $(2) = operating system (OS) (eg. windows).
-# $(3) = cpu architecture (arch) (eg. amd64).
-define build_binary_target
-binary-$(1)-$(2)-$(3): cmd/$(1)/main.go dist/$(1) print-go-version
-	$(call build_binary_v2,$(1),$(2),$(3))
-endef
+binary-go-%: ## Create a Go binary for the given service, using $(BUILDING_OS) and $(BUILDING_ARCH).
+binary-go-%: cmd/%/main.go dist/%
+	$(call build_binary_go,$*,$(BUILDING_OS),$(BUILDING_ARCH))
 
-# Generates targets for ALL combinations of services, operating systems, and
-# CPU architectures. These can be executed by 'make binary-<service>-<os>-<arch>'
-# below.
-$(foreach service,$(CMD_SERVICES), \
-	$(foreach os,$(SUPPORTED_OPERATING_SYSTEMS), \
-		$(foreach arch,$(SUPPORTED_ARCHITECTURES), \
-			$(eval $(call build_binary_target,$(service),$(os),$(arch))) \
-		) \
-	) \
-)
+build-go-%: # Builds & executes the given Go service using the host $(OS) & $(ARCH).
+build-go-%: binary-go-%
+	@dist/$*/$*-$(OS)-$(ARCH)$(call add_windows_suffix, $(OS))
 
-binary-%-%-%: ## Creates a binary for the given service $(1), operating system $(2), and CPU architecture $(3).
-binary-%-%-%: #	 NOTE: this target is 'dummy' and is just for adding a comment to the help page.
-
-binary-%: ## Create a binary for the given service, using $(BUILDING_OS) and $(BUILDING_ARCH).
-binary-%: cmd/%/main.go dist/%
-	$(call build_binary,$*,$(BUILDING_OS),$(BUILDING_ARCH))
-
-binaries-%: ## Creates a binary for all supported OS and ARCH for the given service.
-binaries-%: print-go-version
+binaries-go-%: ## Creates a Go binary for all supported OS and ARCH for the given service.
+binaries-go-%: print-go-version
 	@$(foreach os,$(SUPPORTED_OPERATING_SYSTEMS), \
 		$(foreach arch,$(SUPPORTED_ARCHITECTURES), \
 			BUILDING_OS=$(os) BUILDING_ARCH=$(arch) \
-			$(MAKE) --no-print-directory binary-$*; \
+			$(MAKE) --no-print-directory binary-go-$*; \
 		) \
 	)
 
-build: binaries
-binaries: ## ** Builds binaries only for the environment of the $(BUILDING_OS) operating system.
-binaries: print-go-version
-	@$(foreach service,$(CMD_SERVICES), \
-		$(foreach os,$(SUPPORTED_OPERATING_SYSTEMS), \
-			$(foreach arch,$(SUPPORTED_ARCHITECTURES), \
-				BUILDING_OS=$(os) BUILDING_ARCH=$(arch) \
-				$(MAKE) --no-print-directory binary-$(service); \
-			) \
-		) \
+binaries-go: ## ** Builds Go binaries for every Go service.
+binaries-go:
+	@$(foreach service,$(CMD_SERVICES_GO), \
+		$(MAKE) --no-print-directory binaries-go-$(service); \
 	)
-
-build-%: ## Builds & executes the given service using the host $(OS) & $(ARCH).
-build-%: binary-%
-	@dist/$*/$*-$(OS)-$(ARCH)$(call add_windows_suffix, $(OS))
 
 PHONY += print-go-version
+
+
+#
+# ┌─┐┌─┐┌─┐┌┬┐  ┌┐ ┬┌┐┌┌─┐┬─┐┬┌─┐┌─┐
+# ├─┘│ │└─┐ │───├┴┐││││├─┤├┬┘│├┤ └─┐
+# ┴  └─┘└─┘ ┴   └─┘┴┘└┘┴ ┴┴└─┴└─┘└─┘o
+#
+
+binaries: ## ** Builds binaries for each supported language only for the $(BUILDING_OS) & $(BUILDING_ARCH) environment.
+binaries:
+	$(foreach lang,$(SUPPORTED_LANGUAGES_FOR_BUILDING_BINARIES), \
+		$(MAKE) --no-print-directory binaries-$(lang); \
+	)
+
+PHONY += binaries
 
 
 #
@@ -585,7 +690,7 @@ define push_image
 	@test -z "$(CI)" || echo "##[endgroup]"
 	@test -z "$(CI)" || echo "##[group]Pushing $(1) to AWS ECR in $(AWS_ACCOUNT_ID)."
 	@$(foreach tag,$(TAGS), \
-		echo docker push $(ECR)/$(1):$(tag); \
+		docker push $(ECR)/$(1):$(tag); \
 	)
 	@test -z "$(CI)" || echo "##[endgroup]"
 endef
@@ -610,7 +715,7 @@ push: images
 # $(1) = The name of the service to pull from in AWS ECR.
 define pull_image
 	@test -z "$(CI)" || echo "##[group]Pulling $(1) from AWS ECR in $(AWS_ACCOUNT_ID)."
-	@echo docker pull $(ECR)/$(1):$(COMMIT)
+	@docker pull $(ECR)/$(1):$(COMMIT)
 	@test -z "$(CI)" || echo "##[endgroup]"
 endef
 
@@ -632,16 +737,16 @@ pull:
 # $(1) = The name of the service to promote between AWS accounts.
 define promote_image
 	@test -z "$(CI)" || echo "##[group]Pulling $(1) from AWS ECR in $(PROMOTE_FROM_AWS_ACCOUNT_ID)."
-	@echo docker pull $(PROMOTE_FROM_ECR)/$(1):$(COMMIT)
+	@docker pull $(PROMOTE_FROM_ECR)/$(1):$(COMMIT)
 	@test -z "$(CI)" || echo "##[endgroup]"
 
 	@test -z "$(CI)" || echo "##[group]Tagging $(1) for AWS ECR in $(AWS_ACCOUNT_ID)."
 	@$(foreach tag,$(TAGS), \
-		@echo docker tag $(PROMOTE_FROM_ECR)/$(1):$(COMMIT) $(ECR)/$(1):$(tag)
+		@docker tag $(PROMOTE_FROM_ECR)/$(1):$(COMMIT) $(ECR)/$(1):$(tag)
 	)
 	@test -z "$(CI)" || echo "##[group]Pushing $(1) to AWS ECR in $(AWS_ACCOUNT_ID)."
 	@$(foreach tag,$(TAGS), \
-		@echo docker push $(ECR)/$(1):$(tag)
+		@docker push $(ECR)/$(1):$(tag)
 	)
 	@test -z "$(CI)" || echo "##[endgroup]"
 endef
@@ -656,7 +761,7 @@ promote-root: Dockerfile
 
 promote: ## ** Promotes ALL Docker images for ALL services in this repository to another AWS account.
 promote:
-	@$(foreach image,$(IMAGES), \389235
+	@$(foreach image,$(IMAGES), \
 		$(call promote_image,$(image)); \
 	)
 
@@ -703,17 +808,17 @@ ifndef ENVIRONMENT
 	$(error ENVIRONMENT not defined; please populate it before deploying)
 else
 	@test -z "$(CI)" || echo "##[group]Deploying $*."
-	echo aws cloudformation deploy \
+	aws cloudformation deploy \
 		--region $(AWS_REGION) \
 		--template-file $< \
-		$(shell [ $(FILE_SIZE) >= 51200 ] && echo "--s3-bucket $(BUCKET)") \
+		$(shell [ -n "$(FILE_SIZE)" ] && [ $(FILE_SIZE) -gt 51200 ] && echo "--s3-bucket $(BUCKET)") \
 		--stack-name $(STACK_NAME) \
-		--tags repository=$(REPO) project=$(PROJECT) component=$* revision=$(COMMIT) \
+		--tags organization=$(ORG) repository=$(REPO) project=$(PROJECT) component=$* revision=$(COMMIT) environment=$(ENVIRONMENT) \
 		$(if $(ADDITIONAL_STACK_TAGS),$(ADDITIONAL_STACK_TAGS),) \
-		--capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-		--parameter-overrides Component=$* Revision=$(COMMIT) Environment=$(ENVIRONMENT) \
-		$(if $(wildcard cf/.params/$(ENVIRONMENT).json),$(shell jq -r 'map("\(.ParameterKey)=\(.ParameterValue)") | join(" ")' ./cf/.params/$(ENVIRONMENT).json),) \
+		--parameter-overrides Organization=$(ORG) Repository=$(REPO) Project=$(PROJECT) Component=$* Revision=$(COMMIT) Environment=$(ENVIRONMENT) \
+		$(if $(wildcard $(PARAMS_FILE)),$(shell jq -r 'map("\(.ParameterKey)=\(.ParameterValue)") | join(" ")' $(PARAMS_FILE)),) \
 		$(if $(ADDITIONAL_PARAMETER_OVERRIDES),$(ADDITIONAL_PARAMETER_OVERRIDES),) \
+		--capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
 		--no-fail-on-empty-changeset
 	@test -z "$(CI)" || echo "##[endgroup]"
 endif
@@ -724,7 +829,7 @@ ifndef ENVIRONMENT
 	$(error ENVIRONMENT not defined; please populate it before deploying)
 else
 	@test -z "$(CI)" || echo "##[group]Packaging $*."
-	echo aws cloudformation package \
+	aws cloudformation package \
 		--region $(AWS_REGION) \
 		--template-file $< \
 		--output-template-file $@ \
@@ -831,6 +936,11 @@ list-go-files: list-Go-files
 list-Go-files: # Lists ALL found Go files in this repository.
 list-Go-files:
 	@echo $(GO_FILES) | $(FORMAT_ARRAY)
+
+list-cpp: list-cpp-files
+list-cpp-files: # Lists ALL found C++ files in this repository.
+list-cpp-files:
+	@echo $(CPP_FILES) | $(FORMAT_ARRAY)
 
 list-sam: list-sam-templates
 list-sam-templates: # Lists ALL found SAM templates in this repository.

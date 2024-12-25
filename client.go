@@ -10,10 +10,6 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
-const (
-	Name = "paramstore"
-)
-
 // iSSMClient is an interface for ssm.Client.
 type iSSMClient interface {
 	GetParameters(
@@ -36,8 +32,8 @@ type iSSMClient interface {
 // Client is the mechanism for someone to interact with this package.
 type Client struct {
 
-	// config.
-	name string
+	// tracing.
+	tracerName string // The name of the tracer output in the traces.
 
 	// clients.
 	ssmsvc iSSMClient
@@ -56,12 +52,13 @@ type Client struct {
 func New(ctx context.Context, options ...Option) (*Client, error) {
 
 	// setup tracing.
-	newCtx, span := otel.Tracer(Name).Start(ctx, "New")
+	tracerName := "paramstore"
+	newCtx, span := otel.Tracer(tracerName).Start(ctx, "New")
 	defer span.End()
 
 	// setup client w/ default values.
 	c := &Client{
-		name: Name,
+		tracerName: tracerName,
 
 		awsRegion:      "ap-southeast-2",
 		batchSize:      10,
@@ -87,5 +84,6 @@ func New(ctx context.Context, options ...Option) (*Client, error) {
 		Credentials: cfg.Credentials,
 	})
 
+	c.logger.Debug().Msg("client setup successfully")
 	return c, nil
 }

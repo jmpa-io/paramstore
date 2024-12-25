@@ -11,7 +11,7 @@ type Error struct {
 }
 
 func (e Error) Error() string {
-	return fmt.Sprintf("ssm: %s", e.Message)
+	return fmt.Sprintf("paramstore: %s", e.Message)
 }
 
 // this struct simplifies checking for missing params.

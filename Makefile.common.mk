@@ -46,6 +46,13 @@ $(patsubst $(PROJECT),image-root, \
 )
 endef
 
+# Replaces the '.' character with the '-' character, for when names of resources
+# are sensitive or require specific regex patterns (such as website urls used
+# as the name for a GitHub repository).
+define replace_dots_with_dashes
+$(subst .,-,$(1))
+endef
+
 
 #
 # ┬  ┬┌─┐┬─┐┬┌─┐┌┐ ┬  ┌─┐┌─┐
@@ -150,7 +157,7 @@ TAGS ?= $(COMMIT) latest
 # ---
 
 # The Cloudformation stack name used when deploying a Cloudformation stack..
-STACK_NAME = $(PROJECT)-$*
+STACK_NAME = $(call replace_dots_with_dashes,$(PROJECT)-$*-$(ENVIRONMENT))
 
 # The region used when deploying a Cloudformation stack, or other aws-cli
 # commands, in the authed AWS account.
@@ -164,8 +171,12 @@ ECR = $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 
 # The name of a generic S3 bucket in the AWS Account for storing artifacts.
 ifndef BUCKET
-BUCKET = $(shell aws ssm get-parameter --name "/common/artifacts-bucket" --query 'Parameter.Value' --output text)
+BUCKET = $(shell aws ssm get-parameter --name "/common/artifacts-bucket" --query 'Parameter.Value' --output text 2>/dev/null)
 endif
+
+# The path to the `.params` file. This doesn't check if it exists, it's just
+# the expected path this file MAY exist at.
+PARAMS_FILE ?= cf/.params/$(ENVIRONMENT).json
 
 # ---
 
@@ -182,10 +193,10 @@ PROMOTE_FROM_ECR = $(PROMOTE_FROM_AWS_ACCOUNT_ID).dkr.ecr.$(PROMOTE_AWS_REGION).
 # ---
 
 # The paths to any given Git submodules found in this repository.
-SUBMODULES := $(shell git config --file $(shell while [ ! -d .git ]; do cd ..; done; pwd)/.gitmodules --get-regexp path | awk '{ print $$2 }')
+GIT_SUBMODULES := $(shell git config --file $(shell while [ ! -d .git ]; do cd ..; done; pwd)/.gitmodules --get-regexp path | awk '{ print $$2 }')
 
 # A filter for ignoring Git submodules when using 'find' commands in this Makefile.
-FILTER_IGNORE_SUBMODULES = $(foreach module,$(SUBMODULES),-not \( -path "./$(module)" -o -path "./$(module)/*" \))
+FILTER_IGNORE_SUBMODULES = $(foreach module,$(GIT_SUBMODULES),-not \( -path "./$(module)" -o -path "./$(module)/*" \))
 
 # ---
 
@@ -308,7 +319,7 @@ else
 	@$(foreach file,$(SAM_TEMPLATE_FILES), \
 		- sam validate --region $(AWS_REGION) -t "$(file)"; \
 	)
-endif389235
+endif
 	@test -z "$(CI)" || echo "##[endgroup]"
 
 lint-docker: ## Lints Dockerfiles.
@@ -454,7 +465,7 @@ endef
 # $(2) = operating system (OS) (eg. windows).
 # $(3) = cpu architecture (arch) (eg. amd64).
 define build_binary
-	@test -z "$$CI" || echo "##[group]Building binary $(1)-$389235(2)-$(3)"
+	@test -z "$$CI" || echo "##[group]Building binary $(1)-$(2)-$(3)"
 	GOOS=$(2) GOARCH=$(3) \
 	go build --trimpath \
 		-tags lambda.norpc \
@@ -585,7 +596,7 @@ define push_image
 	@test -z "$(CI)" || echo "##[endgroup]"
 	@test -z "$(CI)" || echo "##[group]Pushing $(1) to AWS ECR in $(AWS_ACCOUNT_ID)."
 	@$(foreach tag,$(TAGS), \
-		echo docker push $(ECR)/$(1):$(tag); \
+		docker push $(ECR)/$(1):$(tag); \
 	)
 	@test -z "$(CI)" || echo "##[endgroup]"
 endef
@@ -610,7 +621,7 @@ push: images
 # $(1) = The name of the service to pull from in AWS ECR.
 define pull_image
 	@test -z "$(CI)" || echo "##[group]Pulling $(1) from AWS ECR in $(AWS_ACCOUNT_ID)."
-	@echo docker pull $(ECR)/$(1):$(COMMIT)
+	@docker pull $(ECR)/$(1):$(COMMIT)
 	@test -z "$(CI)" || echo "##[endgroup]"
 endef
 
@@ -632,16 +643,16 @@ pull:
 # $(1) = The name of the service to promote between AWS accounts.
 define promote_image
 	@test -z "$(CI)" || echo "##[group]Pulling $(1) from AWS ECR in $(PROMOTE_FROM_AWS_ACCOUNT_ID)."
-	@echo docker pull $(PROMOTE_FROM_ECR)/$(1):$(COMMIT)
+	@docker pull $(PROMOTE_FROM_ECR)/$(1):$(COMMIT)
 	@test -z "$(CI)" || echo "##[endgroup]"
 
 	@test -z "$(CI)" || echo "##[group]Tagging $(1) for AWS ECR in $(AWS_ACCOUNT_ID)."
 	@$(foreach tag,$(TAGS), \
-		@echo docker tag $(PROMOTE_FROM_ECR)/$(1):$(COMMIT) $(ECR)/$(1):$(tag)
+		@docker tag $(PROMOTE_FROM_ECR)/$(1):$(COMMIT) $(ECR)/$(1):$(tag)
 	)
 	@test -z "$(CI)" || echo "##[group]Pushing $(1) to AWS ECR in $(AWS_ACCOUNT_ID)."
 	@$(foreach tag,$(TAGS), \
-		@echo docker push $(ECR)/$(1):$(tag)
+		@docker push $(ECR)/$(1):$(tag)
 	)
 	@test -z "$(CI)" || echo "##[endgroup]"
 endef
@@ -656,7 +667,7 @@ promote-root: Dockerfile
 
 promote: ## ** Promotes ALL Docker images for ALL services in this repository to another AWS account.
 promote:
-	@$(foreach image,$(IMAGES), \389235
+	@$(foreach image,$(IMAGES), \
 		$(call promote_image,$(image)); \
 	)
 
@@ -703,17 +714,17 @@ ifndef ENVIRONMENT
 	$(error ENVIRONMENT not defined; please populate it before deploying)
 else
 	@test -z "$(CI)" || echo "##[group]Deploying $*."
-	echo aws cloudformation deploy \
+	aws cloudformation deploy \
 		--region $(AWS_REGION) \
 		--template-file $< \
-		$(shell [ $(FILE_SIZE) >= 51200 ] && echo "--s3-bucket $(BUCKET)") \
+		$(shell [ -n "$(FILE_SIZE)" ] && [ $(FILE_SIZE) -gt 51200 ] && echo "--s3-bucket $(BUCKET)") \
 		--stack-name $(STACK_NAME) \
-		--tags repository=$(REPO) project=$(PROJECT) component=$* revision=$(COMMIT) \
+		--tags organization=$(ORG) repository=$(REPO) project=$(PROJECT) component=$* revision=$(COMMIT) environment=$(ENVIRONMENT) \
 		$(if $(ADDITIONAL_STACK_TAGS),$(ADDITIONAL_STACK_TAGS),) \
-		--capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-		--parameter-overrides Component=$* Revision=$(COMMIT) Environment=$(ENVIRONMENT) \
-		$(if $(wildcard cf/.params/$(ENVIRONMENT).json),$(shell jq -r 'map("\(.ParameterKey)=\(.ParameterValue)") | join(" ")' ./cf/.params/$(ENVIRONMENT).json),) \
+		--parameter-overrides Organization=$(ORG) Repository=$(REPO) Project=$(PROJECT) Component=$* Revision=$(COMMIT) Environment=$(ENVIRONMENT) \
+		$(if $(wildcard $(PARAMS_FILE)),$(shell jq -r 'map("\(.ParameterKey)=\(.ParameterValue)") | join(" ")' $(PARAMS_FILE)),) \
 		$(if $(ADDITIONAL_PARAMETER_OVERRIDES),$(ADDITIONAL_PARAMETER_OVERRIDES),) \
+		--capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
 		--no-fail-on-empty-changeset
 	@test -z "$(CI)" || echo "##[endgroup]"
 endif
@@ -724,7 +735,7 @@ ifndef ENVIRONMENT
 	$(error ENVIRONMENT not defined; please populate it before deploying)
 else
 	@test -z "$(CI)" || echo "##[group]Packaging $*."
-	echo aws cloudformation package \
+	aws cloudformation package \
 		--region $(AWS_REGION) \
 		--template-file $< \
 		--output-template-file $@ \

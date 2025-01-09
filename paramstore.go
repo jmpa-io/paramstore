@@ -15,7 +15,7 @@ import (
 func (c *Client) Get(ctx context.Context, name string) (out Param, err error) {
 
 	// setup tracing.
-	newCtx, span := otel.Tracer(c.name).Start(ctx, "Get")
+	newCtx, span := otel.Tracer(c.tracerName).Start(ctx, "Get")
 	defer span.End()
 
 	// retrieve parameter.
@@ -27,7 +27,7 @@ func (c *Client) Get(ctx context.Context, name string) (out Param, err error) {
 func (c *Client) GetMultiple(ctx context.Context, names ...string) (out []Param, errs error) {
 
 	// setup tracing.
-	newCtx, span := otel.Tracer(c.name).Start(ctx, "Get")
+	newCtx, span := otel.Tracer(c.tracerName).Start(ctx, "GetMultiple")
 	defer span.End()
 
 	// retrieve params in batches.
@@ -87,7 +87,7 @@ func (c *Client) GetMultiple(ctx context.Context, names ...string) (out []Param,
 func (c *Client) Put(ctx context.Context, params Params) (errs error) {
 
 	// setup tracing.
-	newCtx, span := otel.Tracer(c.name).Start(ctx, "Put")
+	newCtx, span := otel.Tracer(c.tracerName).Start(ctx, "Put")
 	defer span.End()
 
 	for _, p := range params {
@@ -124,7 +124,7 @@ func (c *Client) Put(ctx context.Context, params Params) (errs error) {
 func (c *Client) Delete(ctx context.Context, names ...string) (errs error) {
 
 	// setup tracing.
-	newCtx, span := otel.Tracer(c.name).Start(ctx, "Delete")
+	newCtx, span := otel.Tracer(c.tracerName).Start(ctx, "Delete")
 	defer span.End()
 
 	// retrieve params in batches.

@@ -2,14 +2,14 @@ package main
 
 import (
 	"context"
-	"io"
+	"log/slog"
 	"os"
 	"strings"
 
-	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
@@ -17,77 +17,70 @@ import (
 	"github.com/jmpa-io/paramstore"
 )
 
-const (
-	Name    = "example"
-	Version = "head"
+var (
+
+	// the name of this binary.
+	Name = "example"
+
+	// the version of this binary.
+	Version = "HEAD"
 )
-
-func init() {
-
-	// logger global config.
-	zerolog.TimestampFieldName = "ts"
-	zerolog.MessageFieldName = "msg"
-}
 
 func main() {
 
 	// setup log level.
 	logLevel := os.Getenv("LOG_LEVEL")
-	var level zerolog.Level
+	level := slog.LevelWarn
 	switch strings.ToLower(logLevel) {
 	case "debug":
-		level = zerolog.DebugLevel
+		level = slog.LevelDebug
 	case "info":
-		level = zerolog.InfoLevel
+		level = slog.LevelInfo
 	case "warn":
-		level = zerolog.WarnLevel
+		level = slog.LevelWarn
 	case "error":
-		level = zerolog.ErrorLevel
-	default:
-		level = zerolog.DebugLevel
+		level = slog.LevelError
 	}
 
 	// setup handler.
 	h := &handler{
-		config: config{
-			name:    Name,
-			version: Version,
-			env:     getEnv("ENVIRONMENT", "dev"),
-		},
 
-		logger: zerolog.New(os.Stderr).
-			With().Timestamp().Logger().Level(level),
-	}
+		// config.
+		name:        Name,
+		version:     Version,
+		environment: getEnv("ENVIRONMENT", "dev"),
 
-	// setup file to export traces to.
-	file := getEnv("TELEMETRY_FILE", "traces.txt")
-	f, err := os.Create(file)
-	if err != nil {
-		h.logger.Fatal().
-			Err(err).
-			Str("name", file).
-			Msg("failed to create file")
+		// misc.
+		logger: slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level: level,
+			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+				if a.Key == slog.TimeKey {
+					a.Value = slog.StringValue(a.Value.Time().Format("2006-01-02 15:04:05"))
+				}
+				return a
+			},
+		})),
 	}
-	defer f.Close()
 
 	// setup exporter.
-	exp, err := newExporter(f)
+	exp, err := newExporter()
 	if err != nil {
-		h.logger.Fatal().
-			Err(err).
-			Msg("failed to setup exporter")
+		h.logger.Error("failed to setup exporter",
+			"type", "grpc",
+			"error", err,
+		)
+		os.Exit(1)
 	}
 
 	// setup trace provider.
 	tp := trace.NewTracerProvider(
 		trace.WithBatcher(exp),
-		trace.WithResource(newResource(h.name, h.env, h.version)),
+		trace.WithResource(newResource(h.name, h.version, h.environment)),
 	)
 	defer func() {
-		if err := tp.Shutdown(context.Background()); err != nil {
-			h.logger.Fatal().
-				Err(err).
-				Msg("failed to shutdown trace provider")
+		if err := tp.Shutdown(context.TODO()); err != nil {
+			h.logger.Error("failed to shutdown tracer provider", "error", err)
+			os.Exit(1)
 		}
 	}()
 	otel.SetTracerProvider(tp)
@@ -98,16 +91,14 @@ func main() {
 	ctx, span := otel.Tracer(h.name).Start(context.Background(), "main")
 	defer span.End()
 
-	// setup paramstore.
+	// setup client.
 	h.paramstoresvc, err = paramstore.New(ctx)
 	if err != nil {
-		h.logger.Fatal().
-			Err(err).
-			Str("service", "paramstore").
-			Msg("failed to setup service")
+		h.logger.Error("failed to setup client", "client", "paramstore")
+		os.Exit(1)
 	}
 
-	// run.
+	// ~start!
 	h.run(ctx)
 }
 
@@ -125,19 +116,22 @@ func newResource(app, version, env string) *resource.Resource {
 	return r
 }
 
-// newExporter returns a configured console exporter.
-func newExporter(w io.Writer) (trace.SpanExporter, error) {
-	return stdouttrace.New(
-		stdouttrace.WithWriter(w),
-		stdouttrace.WithPrettyPrint(),
+// newExporter returns a started grpc trace exporter.
+//
+// NOTE: set 'OTLP_EXPORTER_OTLP_TRACES_ENDPOINT' to change the endpoint from
+// https://localhost:4317 to another endpoint.
+func newExporter() (*otlptrace.Exporter, error) {
+	return otlptracegrpc.New(
+		context.TODO(),
+		otlptracegrpc.WithInsecure(),
 	)
 }
 
 // getEnv retrieves an environment variable value with a default fallback.
-func getEnv(envVar, fallback string) string {
-	v := os.Getenv(envVar)
-	if v == "" {
+func getEnv(key, fallback string) string {
+	value := os.Getenv(key)
+	if value == "" {
 		return fallback
 	}
-	return v
+	return value
 }

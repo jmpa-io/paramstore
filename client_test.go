@@ -2,18 +2,23 @@ package paramstore
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/rs/zerolog"
 )
 
 var (
-	// debug logger.
-	logger = zerolog.New(os.Stdout).
-		With().Timestamp().
-		Logger().Level(zerolog.DebugLevel)
+	// test logger.
+	logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.TimeKey {
+				a.Value = slog.StringValue(a.Value.Time().Format("2006-01-02 15:04:05"))
+			}
+			return a
+		},
+	}))
 )
 
 func Test_New(t *testing.T) {
@@ -27,43 +32,103 @@ func Test_New(t *testing.T) {
 				awsRegion:      "ap-southeast-2",
 				batchSize:      10,
 				withDecryption: false,
-				logger:         zerolog.Logger{},
+				logger:         slog.Default(),
 			},
 		},
-		"set aws region": {
-			options: []Option{WithAWSRegion("us-east-1")},
-			want: &Client{
-				awsRegion:      "us-east-1",
-				batchSize:      10,
-				withDecryption: false,
-				logger:         zerolog.Logger{},
-			},
-		},
-		"set batch size": {
-			options: []Option{WithBatchSize(5)},
-			want: &Client{
-				awsRegion:      "ap-southeast-2",
-				batchSize:      5,
-				withDecryption: false,
-				logger:         zerolog.Logger{},
-			},
-		},
-		"set with decryption": {
-			options: []Option{WithDecryption(true)},
+		"with log level (debug)": {
+			options: []Option{WithLogLevel(slog.LevelDebug)},
 			want: &Client{
 				awsRegion:      "ap-southeast-2",
 				batchSize:      10,
-				withDecryption: true,
-				logger:         zerolog.Logger{},
+				withDecryption: false,
+				logger:         slog.Default(),
+				logLevel:       -4,
 			},
 		},
-		"set with logger": {
+		"with log level (info)": {
+			options: []Option{WithLogLevel(slog.LevelInfo)},
+			want: &Client{
+				awsRegion:      "ap-southeast-2",
+				batchSize:      10,
+				withDecryption: false,
+				logger:         slog.Default(),
+				logLevel:       0,
+			},
+		},
+		"with log level (warn)": {
+			options: []Option{WithLogLevel(slog.LevelWarn)},
+			want: &Client{
+				awsRegion:      "ap-southeast-2",
+				batchSize:      10,
+				withDecryption: false,
+				logger:         slog.Default(),
+				logLevel:       4,
+			},
+		},
+		"with log level (error)": {
+			options: []Option{WithLogLevel(slog.LevelError)},
+			want: &Client{
+				awsRegion:      "ap-southeast-2",
+				batchSize:      10,
+				withDecryption: false,
+				logger:         slog.Default(),
+				logLevel:       8,
+			},
+		},
+		"with logger": {
 			options: []Option{WithLogger(logger)},
 			want: &Client{
 				awsRegion:      "ap-southeast-2",
 				batchSize:      10,
 				withDecryption: false,
 				logger:         logger,
+			},
+		},
+		"with aws region": {
+			options: []Option{WithAWSRegion("us-east-1")},
+			want: &Client{
+				awsRegion:      "us-east-1",
+				batchSize:      10,
+				withDecryption: false,
+				logger:         slog.Default(),
+			},
+		},
+		"with batch size (n > min && n < max)": {
+			options: []Option{WithBatchSize(5)},
+			want: &Client{
+				awsRegion:      "ap-southeast-2",
+				batchSize:      5,
+				withDecryption: false,
+				logger:         slog.Default(),
+			},
+		},
+		"with batch size (n < min)": {
+			options: []Option{WithBatchSize(0)},
+			want: &Client{
+				awsRegion:      "ap-southeast-2",
+				batchSize:      5,
+				withDecryption: false,
+				logger:         slog.Default(),
+			},
+			err: "batchSize must be greater than 0",
+		},
+		"with batch size (n > max)": {
+			options: []Option{WithBatchSize(11)},
+			want: &Client{
+				awsRegion:      "ap-southeast-2",
+				batchSize:      5,
+				withDecryption: false,
+				logger:         slog.Default(),
+			},
+			err: "batchSize must be less than or equal to 10",
+		},
+		"with decryption": {
+			options: []Option{WithDecryption(true)},
+			want: &Client{
+				awsRegion:      "ap-southeast-2",
+				batchSize:      10,
+				withDecryption: true,
+				logger:         slog.Default(),
 			},
 		},
 	}
@@ -80,11 +145,18 @@ func Test_New(t *testing.T) {
 				t.Errorf("New() returned an error; error=%v", err)
 				return
 			}
-			if got.awsRegion != tt.want.awsRegion ||
-				got.batchSize != tt.want.batchSize ||
-				got.withDecryption != tt.want.withDecryption ||
-				got.logger.GetLevel() != tt.want.logger.GetLevel() {
-				t.Errorf("New() returned unexpected configuration; want=%+v, got=%+v\n", tt.want, got)
+			switch {
+			case
+				got.logLevel != tt.want.logLevel,
+				(got.logger != slog.Default() && tt.want.logger != slog.Default()) && got.logger != tt.want.logger,
+				got.awsRegion != tt.want.awsRegion,
+				got.withDecryption != tt.want.withDecryption,
+				got.batchSize != tt.want.batchSize:
+				t.Errorf(
+					"New() returned unexpected configuration; want=%+v, got=%+v\n",
+					tt.want,
+					got,
+				)
 				return
 			}
 		})

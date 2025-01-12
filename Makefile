@@ -1,12 +1,8 @@
 
 # Default PROJECT, if not given by another Makefile.
 ifndef PROJECT
-PROJECT=root-template
+PROJECT=paramstore
 endif
-
-# Services.
-SERVICES =
-# TODO: fill these out with services to deploy.
 
 # Targets.
 example: dist/example ## Builds & runs example service.

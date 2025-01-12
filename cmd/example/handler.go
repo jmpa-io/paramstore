@@ -32,16 +32,16 @@ func (h *handler) run(ctx context.Context) {
 	defer span.End()
 
 	// setup params.
-	params := paramstore.Params{
+	params := paramstore.Parameters{
 		{
 			Name:  "/paramstore-test/1",
 			Value: "1",
-			Type:  paramstore.SecureStringParamType,
+			Type:  paramstore.ParameterTypeSecureString,
 		},
 		{
 			Name:  "/paramstore-test/2",
 			Value: "2",
-			Type:  paramstore.StringParamType,
+			Type:  paramstore.ParameterTypeString,
 		},
 	}
 
@@ -63,14 +63,14 @@ func (h *handler) run(ctx context.Context) {
 	l.Debug("successfully downloaded parameter")
 
 	// download params (multiple).
-	if _, errs := h.paramstoresvc.GetMultiple(newCtx, params.NamesToSliceString()...); errs != nil {
+	if _, errs := h.paramstoresvc.GetMultiple(newCtx, params.ToSliceString()...); errs != nil {
 		l.Error("failed to download parameters", "error", errs)
 		os.Exit(1)
 	}
 	l.Debug("successfully downloaded parameters")
 
 	// delete params.
-	if errs := h.paramstoresvc.Delete(newCtx, params.NamesToSliceString()...); errs != nil {
+	if errs := h.paramstoresvc.Delete(newCtx, params.ToSliceString()...); errs != nil {
 		l.Error("failed to delete parameters", "error", errs)
 		os.Exit(1)
 	}

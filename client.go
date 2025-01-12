@@ -2,11 +2,11 @@ package paramstore
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
+	"os"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
-	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
 )
 
@@ -29,7 +29,7 @@ type iSSMClient interface {
 	) (*ssm.DeleteParametersOutput, error)
 }
 
-// Client is the mechanism for someone to interact with this package.
+// Client defines a client for this package.
 type Client struct {
 
 	// tracing.
@@ -45,10 +45,14 @@ type Client struct {
 	keyId          string // The KMS key to use when encrypting and decrypting parameters from paramstore.
 
 	// misc.
-	logger zerolog.Logger
+	logLevel slog.Level   // The log level of the default logger.
+	logger   *slog.Logger // The logger used in this client (custom or default).
 }
 
-// New returns a new Client.
+// New creates and returns a new Client. The client itself is set up with
+// tracing & logging. Additional options can be provided to modify its
+// behavior, via the options slice. The client is used for interacting with
+// parameters in AWS SSM Parameter Store.
 func New(ctx context.Context, options ...Option) (*Client, error) {
 
 	// setup tracing.
@@ -65,17 +69,33 @@ func New(ctx context.Context, options ...Option) (*Client, error) {
 		withDecryption: false,
 	}
 
-	// overwrite client with given options.
+	// overwrite client with any given options.
 	for _, o := range options {
 		if err := o(c); err != nil {
-			return nil, fmt.Errorf("failed to setup client: %v", err)
+			return nil, ErrClientFailedToSetOption{err}
 		}
+	}
+
+	// determine if the default logger should be used.
+	if c.logger == nil {
+
+		// use default logger.
+		c.logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level: c.logLevel, // default log level is 'INFO'.
+			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+				if a.Key == slog.TimeKey {
+					a.Value = slog.StringValue(a.Value.Time().Format("2006-01-02 15:04:05"))
+				}
+				return a
+			},
+		}))
+
 	}
 
 	// load aws config.
 	cfg, err := config.LoadDefaultConfig(newCtx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load aws config: %v", err)
+		return nil, ErrClientFailedToLoadAWSConfig{err}
 	}
 
 	// setup ssm client.
@@ -84,6 +104,6 @@ func New(ctx context.Context, options ...Option) (*Client, error) {
 		Credentials: cfg.Credentials,
 	})
 
-	c.logger.Debug().Msg("client setup successfully")
+	c.logger.Debug("client setup successfully")
 	return c, nil
 }

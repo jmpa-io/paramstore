@@ -24,6 +24,3 @@ var validTestdata = testParameters{
 		},
 	},
 }
-
-// invalidTestdata represents a bunch of invalid Parameters, used for testing.
-var invalidTestdata = testParameters{}

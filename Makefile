@@ -5,8 +5,11 @@ PROJECT=paramstore
 endif
 
 # Targets.
-example: dist/example ## Builds & runs example service.
-	@dist/example
+get: binary-go-get ## Build the 'get' binary.
+tracing: binary-go-tracing ## Build the 'tracing' binary.
+run: get tracing
+
+PHONY += get tracing run
 
 ---: ## ---
 

@@ -21,13 +21,9 @@ func mockDeleteParameters(
 		out := &ssm.DeleteParametersOutput{}
 		switch t {
 		case "success":
-			for _, n := range input.Names {
-				out.DeletedParameters = append(out.DeletedParameters, n)
-			}
+			out.DeletedParameters = append(out.DeletedParameters, input.Names...)
 		case "invalid":
-			for _, n := range input.Names {
-				out.InvalidParameters = append(out.InvalidParameters, n)
-			}
+			out.InvalidParameters = append(out.InvalidParameters, input.Names...)
 		case "error":
 			return nil, fmt.Errorf(
 				"failed to delete parameter: %v",

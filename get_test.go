@@ -37,9 +37,7 @@ func mockGetParameters(
 				}
 			}
 		case "invalid":
-			for _, n := range input.Names {
-				out.InvalidParameters = append(out.InvalidParameters, n)
-			}
+			out.InvalidParameters = append(out.InvalidParameters, input.Names...)
 		case "error":
 			return nil, fmt.Errorf(
 				"failed to get parameter: %v",

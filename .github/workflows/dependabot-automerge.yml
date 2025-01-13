@@ -16,4 +16,3 @@ jobs:
   dependabot-automerge:
     if: startsWith(github.head_ref, 'dependabot/')
     uses: jmpa-io/pipelines/.github/workflows/00-dependabot-automerge.yml@main
-

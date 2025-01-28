@@ -10,7 +10,6 @@
 ```
 <a href="LICENSE" target="_blank"><img src="https://img.shields.io/github/license/jmpa-io/paramstore.svg" alt="GitHub License"></a>
 [![CI/CD](https://github.com/jmpa-io/paramstore/actions/workflows/cicd.yml/badge.svg)](https://github.com/jmpa-io/paramstore/actions/workflows/cicd.yml)
-[![Automerge](https://github.com/jmpa-io/paramstore/actions/workflows/.github/workflows/dependabot-automerge.yml/badge.svg)](https://github.com/jmpa-io/paramstore/actions/workflows/.github/workflows/dependabot-automerge.yml)
 [![Codecov](https://codecov.io/github/jmpa-io/paramstore/graph/badge.svg)](https://codecov.io/github/jmpa-io/paramstore)
 
 ## `Usage`

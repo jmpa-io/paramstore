@@ -50,6 +50,15 @@ const (
 	maxBatchSize = 10
 )
 
+// WithKeyId configures the KMS key ID used by the client when putting
+// SecureString parameters into paramstore.
+func WithKeyId(keyId string) Option {
+	return func(c *Client) error {
+		c.keyId = keyId
+		return nil
+	}
+}
+
 // WithBatchSize configures the batchSize used by the client when retrieving
 // from or uploading to paramstore.
 func WithBatchSize(size int) Option {

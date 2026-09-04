@@ -4,6 +4,9 @@ on:
   push:
     paths:
     - '.github/workflows/cicd.yml'
+    - '**.go'
+    - 'go.mod'
+    - 'go.sum'
     - 'bin/*'
     - 'cf/**'
     - 'cmd/**'

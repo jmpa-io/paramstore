@@ -99,9 +99,8 @@ func New(ctx context.Context, options ...Option) (*Client, error) {
 	}
 
 	// setup ssm client.
-	c.ssmsvc = ssm.New(ssm.Options{
-		Region:      c.awsRegion,
-		Credentials: cfg.Credentials,
+	c.ssmsvc = ssm.NewFromConfig(cfg, func(o *ssm.Options) {
+		o.Region = c.awsRegion
 	})
 
 	c.logger.Debug("client setup successfully")

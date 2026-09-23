@@ -5,8 +5,8 @@ PROJECT=paramstore
 endif
 
 # Targets.
-get: binary-go-get ## Build the 'get' binary.
-tracing: binary-go-tracing ## Build the 'tracing' binary.
+get: binary-go-get ## Builds the 'get' binary.
+tracing: binary-go-tracing ## Builds the 'tracing' binary.
 run: get tracing
 
 PHONY += get tracing run

@@ -124,6 +124,7 @@ func newExporter() (*otlptrace.Exporter, error) {
 	return otlptracegrpc.New(
 		context.TODO(),
 		otlptracegrpc.WithInsecure(),
+		otlptracegrpc.WithEndpoint("localhost:4319"),
 	)
 }
 

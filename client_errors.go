@@ -12,6 +12,10 @@ func (e ErrClientFailedToSetOption) Error() string {
 	return fmt.Sprintf("failed to set option in client: %v", e.err)
 }
 
+func (e ErrClientFailedToSetOption) Unwrap() error {
+	return e.err
+}
+
 type ErrClientFailedToLoadAWSConfig struct {
 	err error
 }
@@ -21,4 +25,8 @@ type ErrClientFailedToLoadAWSConfig struct {
 // the environment isn't configured correctly to use the `awscli` for example.
 func (e ErrClientFailedToLoadAWSConfig) Error() string {
 	return fmt.Sprintf("failed to load AWS config: %v", e.err)
+}
+
+func (e ErrClientFailedToLoadAWSConfig) Unwrap() error {
+	return e.err
 }

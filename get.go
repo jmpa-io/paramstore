@@ -22,6 +22,9 @@ func (c *Client) Get(ctx context.Context, name string) (out *Parameter, err erro
 	if err != nil {
 		return nil, err
 	}
+	if len(param) == 0 {
+		return nil, fmt.Errorf("parameter %q not found", name)
+	}
 	return &param[0], nil
 }
 

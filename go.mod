@@ -3,7 +3,7 @@ module github.com/jmpa-io/paramstore
 go 1.26.5
 
 require (
-	github.com/aws/aws-sdk-go-v2 v1.34.0
+	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/config v1.29.2
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.56.8
 	github.com/hashicorp/go-multierror v1.1.1

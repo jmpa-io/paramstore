@@ -49,6 +49,14 @@ func main() {
 }
 ```
 
+## `Tracing`
+
+Every client call (`Get`, `GetMultiple`, `Put`, `Delete`) creates a span via the global OpenTelemetry tracer provider, and failures are recorded on the span. This package only depends on the OTel API: without a tracer provider configured, spans are no-ops. See `cmd/tracing` for a full example, configured with the standard `OTEL_EXPORTER_OTLP_*` environment variables, eg:
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 go run ./cmd/tracing
+```
+
 For more explicit examples, see the `cmd/*/main.go` files for details.
 
 ## `License`

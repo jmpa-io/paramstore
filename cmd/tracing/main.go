@@ -77,29 +77,30 @@ func main() {
 		trace.WithBatcher(exp),
 		trace.WithResource(newResource(h.name, h.version, h.environment)),
 	)
-	defer func() {
-		if err := tp.Shutdown(context.TODO()); err != nil {
-			h.logger.Error("failed to shutdown tracer provider", "error", err)
-			os.Exit(1)
-		}
-	}()
 	otel.SetTracerProvider(tp)
 
 	// ---
 
 	// setup span.
 	ctx, span := otel.Tracer(h.name).Start(context.Background(), "main")
-	defer span.End()
 
-	// setup client.
+	// setup client + ~start!
+	code := 0
 	h.paramstoresvc, err = paramstore.New(ctx)
 	if err != nil {
-		h.logger.Error("failed to setup client", "client", "paramstore")
-		os.Exit(1)
+		h.logger.Error("failed to setup client", "client", "paramstore", "error", err)
+		code = 1
+	} else if err := h.run(ctx); err != nil {
+		code = 1
 	}
 
-	// ~start!
-	h.run(ctx)
+	// flush spans before exiting (os.Exit skips defers).
+	span.End()
+	if err := tp.Shutdown(context.Background()); err != nil {
+		h.logger.Error("failed to shutdown tracer provider", "error", err)
+		code = 1
+	}
+	os.Exit(code)
 }
 
 // newResource returns a resource describing this app.
@@ -118,14 +119,11 @@ func newResource(app, version, env string) *resource.Resource {
 
 // newExporter returns a started grpc trace exporter.
 //
-// NOTE: set 'OTLP_EXPORTER_OTLP_TRACES_ENDPOINT' to change the endpoint from
-// https://localhost:4317 to another endpoint.
+// NOTE: the exporter is configured via the standard OTel environment variables,
+// eg. set 'OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317' (an http scheme,
+// or 'OTEL_EXPORTER_OTLP_INSECURE=true', disables TLS).
 func newExporter() (*otlptrace.Exporter, error) {
-	return otlptracegrpc.New(
-		context.TODO(),
-		otlptracegrpc.WithInsecure(),
-		otlptracegrpc.WithEndpoint("localhost:4319"),
-	)
+	return otlptracegrpc.New(context.TODO())
 }
 
 // getEnv retrieves an environment variable value with a default fallback.

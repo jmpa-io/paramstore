@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	multierror "github.com/hashicorp/go-multierror"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // Put uploads one or more params to paramstore.
@@ -16,6 +17,8 @@ func (c *Client) Put(ctx context.Context, parameters Parameters) (errs error) {
 	// setup tracing.
 	newCtx, span := otel.Tracer(c.tracerName).Start(ctx, "Put")
 	defer span.End()
+	defer func() { recordSpanError(span, errs) }()
+	span.SetAttributes(attribute.Int("paramstore.count", len(parameters)))
 
 	for _, p := range parameters {
 

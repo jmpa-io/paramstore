@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	multierror "github.com/hashicorp/go-multierror"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // Get retrieves a single param from paramstore.
@@ -16,6 +17,7 @@ func (c *Client) Get(ctx context.Context, name string) (out *Parameter, err erro
 	// setup tracing.
 	newCtx, span := otel.Tracer(c.tracerName).Start(ctx, "Get")
 	defer span.End()
+	defer func() { recordSpanError(span, err) }()
 
 	// retrieve parameter.
 	param, err := c.GetMultiple(newCtx, name)
@@ -34,6 +36,8 @@ func (c *Client) GetMultiple(ctx context.Context, names ...string) (out Paramete
 	// setup tracing.
 	newCtx, span := otel.Tracer(c.tracerName).Start(ctx, "GetMultiple")
 	defer span.End()
+	defer func() { recordSpanError(span, errs) }()
+	span.SetAttributes(attribute.Int("paramstore.count", len(names)))
 
 	// retrieve params in batches.
 	var invalid []string

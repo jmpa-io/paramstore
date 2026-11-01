@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	multierror "github.com/hashicorp/go-multierror"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // Delete deletes one or more params from paramstore.
@@ -15,6 +16,8 @@ func (c *Client) Delete(ctx context.Context, names ...string) (errs error) {
 	// setup tracing.
 	newCtx, span := otel.Tracer(c.tracerName).Start(ctx, "Delete")
 	defer span.End()
+	defer func() { recordSpanError(span, errs) }()
+	span.SetAttributes(attribute.Int("paramstore.count", len(names)))
 
 	// retrieve params in batches.
 	var invalid []string

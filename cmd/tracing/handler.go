@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"log/slog"
-	"os"
 
 	"go.opentelemetry.io/otel"
 
@@ -25,7 +24,7 @@ type handler struct {
 }
 
 // run is like main but after the handler is configured.
-func (h *handler) run(ctx context.Context) {
+func (h *handler) run(ctx context.Context) error {
 
 	// setup span.
 	newCtx, span := otel.Tracer(h.name).Start(ctx, "run")
@@ -49,30 +48,31 @@ func (h *handler) run(ctx context.Context) {
 	l := h.logger.With("count", len(params))
 
 	// upload params.
-	if errs := h.paramstoresvc.Put(newCtx, params); errs != nil {
-		l.Error("failed to upload parameters", "error", errs)
-		os.Exit(1)
+	if err := h.paramstoresvc.Put(newCtx, params); err != nil {
+		l.Error("failed to upload parameters", "error", err)
+		return err
 	}
 	l.Debug("successfully uploaded parameters")
 
 	// download param.
 	if _, err := h.paramstoresvc.Get(newCtx, params[0].Name); err != nil {
 		l.Error("failed to download parameters", "error", err)
-		os.Exit(1)
+		return err
 	}
 	l.Debug("successfully downloaded parameter")
 
 	// download params (multiple).
-	if _, errs := h.paramstoresvc.GetMultiple(newCtx, params.ToSliceString()...); errs != nil {
-		l.Error("failed to download parameters", "error", errs)
-		os.Exit(1)
+	if _, err := h.paramstoresvc.GetMultiple(newCtx, params.ToSliceString()...); err != nil {
+		l.Error("failed to download parameters", "error", err)
+		return err
 	}
 	l.Debug("successfully downloaded parameters")
 
 	// delete params.
-	if errs := h.paramstoresvc.Delete(newCtx, params.ToSliceString()...); errs != nil {
-		l.Error("failed to delete parameters", "error", errs)
-		os.Exit(1)
+	if err := h.paramstoresvc.Delete(newCtx, params.ToSliceString()...); err != nil {
+		l.Error("failed to delete parameters", "error", err)
+		return err
 	}
 	l.Debug("successfully deleted parameters")
+	return nil
 }

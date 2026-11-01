@@ -8,6 +8,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // iSSMClient is an interface for ssm.Client.
@@ -105,4 +107,13 @@ func New(ctx context.Context, options ...Option) (*Client, error) {
 
 	c.logger.Debug("client setup successfully")
 	return c, nil
+}
+
+// recordSpanError marks the span as failed, if err is not nil.
+func recordSpanError(span trace.Span, err error) {
+	if err == nil {
+		return
+	}
+	span.RecordError(err)
+	span.SetStatus(codes.Error, err.Error())
 }

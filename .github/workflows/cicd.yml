@@ -32,7 +32,7 @@ jobs:
       ADMIN_GITHUB_TOKEN: ${{ secrets.ADMIN_GITHUB_TOKEN }}
 
   test:
-    uses: jmpa-io/pipelines/.github/workflows/20-test.yml@462acc0d5973ca1f6c014cbd422c266e576ddf17 # v1.0.0
+    uses: jmpa-io/pipelines/.github/workflows/20-test.yml@0877ff2d3aa9a4add377ad679135ab5a5c3e2b8a # v1.1.0
     with:
       with-code-coverage: true
     secrets:

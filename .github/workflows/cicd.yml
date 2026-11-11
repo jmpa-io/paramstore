@@ -45,7 +45,7 @@ jobs:
   build:
     needs: [lint, test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: jmpa-io/pipelines/.github/workflows/30-build-binaries.yml@462acc0d5973ca1f6c014cbd422c266e576ddf17 # v1.0.0
+    uses: jmpa-io/pipelines/.github/workflows/30-build-binaries.yml@0877ff2d3aa9a4add377ad679135ab5a5c3e2b8a # v1.1.0
     secrets:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
